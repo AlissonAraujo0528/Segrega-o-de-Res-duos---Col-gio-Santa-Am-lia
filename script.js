@@ -117,6 +117,7 @@
                 password: ui.loginForm.elements.password.value,
             });
             if (error) throw error;
+            // O onAuthStateChange cuidará do resto
         } catch (error) {
             ui.loginError.textContent = 'Email ou senha inválidos.';
             toggleButtonLoading(ui.loginBtn, false);
@@ -151,25 +152,37 @@
 
     const checkUserProfileAndInitialize = async (user) => {
         try {
-            const { data: profile, error } = await supabaseClient.from('profiles').select('role').eq('id', user.id).single();
-            if (error || !profile) throw new Error("Perfil de utilizador não encontrado.");
+            const { data: profile, error } = await supabaseClient
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+            
+            // Este é o ponto crucial: se houver um erro ou o perfil for nulo, lançamos um erro claro.
+            if (error || !profile) {
+                throw new Error("Perfil de usuário não foi encontrado na base de dados.");
+            }
+            
             appState.userRole = profile.role;
             initializeAppUI();
+
         } catch (error) {
             console.error("Erro ao procurar perfil:", error);
             showNotification("O seu perfil de utilizador não foi encontrado. Contacte o administrador.", "error");
+            // Força o logout para evitar um estado de "meio logado"
             await supabaseClient.auth.signOut();
         }
     };
 
-    supabaseClient.auth.onAuthStateChange((_, session) => {
-        if (session?.user) {
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
             checkUserProfileAndInitialize(session.user);
-        } else {
+        } else if (event === 'SIGNED_OUT') {
             ui.appContainer.classList.add('hidden');
             ui.loginModal.classList.add('active');
             appState.userRole = null;
             clearTimeout(appState.inactivityTimer);
+            toggleButtonLoading(ui.loginBtn, false); // Garante que o botão de login está usável
         }
     });
     
@@ -177,13 +190,15 @@
 
     const initializeAppUI = () => {
         ui.loginModal.classList.remove('active');
-        toggleButtonLoading(ui.loginBtn, false); // Garante que o botão de login seja reativado
         ui.appContainer.classList.remove('hidden');
         ui.evaluationDateInput.max = new Date().toISOString().split("T")[0];
         ui.evaluationDateInput.valueAsDate = new Date();
         ui.adminActionsContainer.style.display = appState.userRole === 'admin' ? 'block' : 'none';
         resetInactivityTimer();
     };
+
+    // ... (O resto do seu código, como calculateScore, handleFormSubmit, etc., permanece o mesmo)
+    // Vou incluir o resto para garantir que o arquivo esteja completo.
 
     const calculateScore = () => {
         const totalScore = [...ui.form.querySelectorAll('input[type="radio"]:checked')].reduce((sum, radio) => sum + parseInt(radio.value, 10), 0);
@@ -268,8 +283,8 @@
 
     const displayResults = async (page = 1, filterText = '') => {
         appState.currentPage = page;
-        ui.resultsBody.innerHTML = '';
-        ui.resultsLoader.style.display = 'table-row';
+        ui.resultsBody.innerHTML = ''; // Limpa o corpo da tabela
+        ui.resultsLoader.style.display = 'table-row'; // Mostra o loader
         ui.paginationControls.style.visibility = 'hidden';
 
         const from = (page - 1) * appState.recordsPerPage;
@@ -327,7 +342,7 @@
             appState.currentlyEditingId = idToEdit;
             Object.keys(evaluation).forEach(key => {
                 const el = ui.form.elements[key];
-                if (el) el.value = evaluation[key] || '';
+                if (el && key !== 'details') el.value = evaluation[key] || '';
             });
             ui.form.elements['evaluation-date'].value = evaluation.date;
 
@@ -350,19 +365,21 @@
             showNotification('Não foi possível carregar os dados para edição.', 'error');
         }
     };
-
+    
     const renderCharts = async () => {
         try {
             const { data: evaluations, error } = await supabaseClient.from('evaluations').select('sector, score, date, details');
             if (error) throw error;
-            if (!evaluations || evaluations.length === 0) return;
+            if (!evaluations || evaluations.length === 0) {
+                 showNotification("Não há dados suficientes para gerar gráficos.", "info");
+                 return;
+            };
     
             Object.values(appState.chartInstances).forEach(chart => chart?.destroy());
     
-            const chartColors = { primary: 'rgba(0, 90, 156, 0.7)', primaryBorder: 'rgba(0, 90, 156, 1)', secondary: 'rgba(86, 61, 124, 0.8)', secondaryBorder: 'rgba(86, 61, 124, 1)', danger: 'rgba(220, 53, 69, 0.7)' };
+            const chartColors = { primary: 'rgba(0, 90, 156, 0.7)', secondary: 'rgba(86, 61, 124, 0.8)', danger: 'rgba(220, 53, 69, 0.7)', warning: 'rgba(255, 193, 7, 0.7)' };
             Chart.defaults.font.family = "'Poppins', sans-serif";
     
-            // Gráfico 1: Pontuação média por setor
             const sectorData = evaluations.reduce((acc, { sector, score }) => {
                 acc[sector] = acc[sector] || { totalScore: 0, count: 0 };
                 acc[sector].totalScore += score;
@@ -373,7 +390,6 @@
             const barData = barLabels.map(sector => (sectorData[sector].totalScore / sectorData[sector].count).toFixed(2));
             appState.chartInstances.scoreBySector = new Chart(document.getElementById('scoreBySectorChart'), { type: 'bar', data: { labels: barLabels, datasets: [{ label: 'Pontuação Média', data: barData, backgroundColor: chartColors.primary }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Pontuação Média por Setor/Sala', font: { size: 16 } } } } });
     
-            // Gráfico 2: Evolução da pontuação média
             const timeData = evaluations.reduce((acc, { date, score }) => {
                 const dateKey = new Date(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
                 acc[dateKey] = acc[dateKey] || { totalScore: 0, count: 0 };
@@ -383,9 +399,8 @@
             }, {});
             const lineLabels = Object.keys(timeData).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
             const lineData = lineLabels.map(date => (timeData[date].totalScore / timeData[date].count).toFixed(2));
-            appState.chartInstances.scoreOverTime = new Chart(document.getElementById('scoreOverTimeChart'), { type: 'line', data: { labels: lineLabels, datasets: [{ label: 'Pontuação Média Diária', data: lineData, borderColor: chartColors.secondaryBorder, tension: 0.1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Evolução da Pontuação Média', font: { size: 16 } } } } });
+            appState.chartInstances.scoreOverTime = new Chart(document.getElementById('scoreOverTimeChart'), { type: 'line', data: { labels: lineLabels, datasets: [{ label: 'Pontuação Média Diária', data: lineData, borderColor: chartColors.secondary, tension: 0.1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Evolução da Pontuação Média', font: { size: 16 } } } } });
     
-            // Gráfico 3: Itens com pior desempenho
             const worstItemsCounter = evaluations.reduce((acc, { details }) => {
                 if (details) {
                     if (details.organicos === '2') acc['Orgânicos Misturados']++;
@@ -397,7 +412,7 @@
             }, { 'Orgânicos Misturados': 0, 'Papéis Sanitários': 0, 'Outros Não Recicláveis': 0, 'Nível dos Coletores': 0 });
             const pieLabels = Object.keys(worstItemsCounter);
             const pieData = Object.values(worstItemsCounter);
-            appState.chartInstances.worstItems = new Chart(document.getElementById('worstItemsChart'), { type: 'pie', data: { labels: pieLabels, datasets: [{ label: 'Nº de Avaliações "Regulares"', data: pieData, backgroundColor: [chartColors.danger, chartColors.warning, chartColors.secondary, chartColors.primary] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Itens com Pior Desempenho (Contagem de "Regular")', font: { size: 16 } } } } });
+            appState.chartInstances.worstItems = new Chart(document.getElementById('worstItemsChart'), { type: 'pie', data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: [chartColors.danger, chartColors.warning, chartColors.secondary, chartColors.primary] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Itens com Pior Desempenho (Contagem de "Regular")', font: { size: 16 } } } } });
         } catch (error) {
             console.error("Erro ao renderizar gráficos:", error);
             showNotification("Não foi possível carregar os dados do dashboard.", "error");
@@ -442,17 +457,11 @@
     };
 
     const setupEventListeners = () => {
-        // --- Delegação de eventos para botões de fechar modais ---
         document.body.addEventListener('click', (e) => {
-            if (e.target.matches('.close-button')) {
-                e.target.closest('.modal').classList.remove('active');
-            }
-            if (e.target.matches('.modal')) {
-                e.target.classList.remove('active');
-            }
+            const target = e.target;
+            if (target.matches('.close-button')) target.closest('.modal').classList.remove('active');
+            if (target.matches('.modal')) target.classList.remove('active');
         });
-
-        // --- Autenticação ---
         ui.loginForm.addEventListener('submit', handleLogin);
         ui.logoutBtn.addEventListener('click', handleLogout);
         ui.forgotPasswordLink.addEventListener('click', (e) => {
@@ -462,15 +471,11 @@
             ui.forgotPasswordModal.classList.add('active');
         });
         ui.forgotPasswordForm.addEventListener('submit', handleForgotPassword);
-
-        // --- Formulário Principal ---
         ui.form.addEventListener('submit', handleFormSubmit);
         ui.form.addEventListener('change', calculateScore);
         ui.clearBtn.addEventListener('click', () => {
             showConfirmation('Limpar Formulário?', 'Todos os dados não guardados serão perdidos.', resetFormMode, 'Limpar', 'warning-btn');
         });
-
-        // --- Abertura de Modais ---
         ui.openRankingBtn.addEventListener('click', () => {
             ui.rankingFilter.value = '';
             displayResults(1);
@@ -480,8 +485,6 @@
             renderCharts();
             ui.dashboardModal.classList.add('active');
         });
-
-        // --- Ranking e Ações ---
         ui.rankingFilter.addEventListener('input', () => {
             clearTimeout(appState.searchDebounceTimer);
             appState.searchDebounceTimer = setTimeout(() => displayResults(1, ui.rankingFilter.value.trim()), 400);
@@ -494,12 +497,8 @@
             if (button.classList.contains('edit')) handleEdit(id);
         });
         ui.exportBtn.addEventListener('click', exportToXls);
-
-        // --- Paginação ---
         ui.prevPageBtn.addEventListener('click', () => { if (appState.currentPage > 1) displayResults(appState.currentPage - 1, ui.rankingFilter.value.trim()); });
-        ui.nextPageBtn.addEventListener('click', () => { displayResults(appState.currentPage + 1, ui.rankingFilter.value.trim()); });
-
-        // --- Ações de Admin ---
+        ui.nextPageBtn.addEventListener('click', () => { if (ui.nextPageBtn.disabled === false) displayResults(appState.currentPage + 1, ui.rankingFilter.value.trim()); });
         ui.resetDbBtn.addEventListener('click', () => {
             showConfirmation("Limpar Base de Dados?", "ATENÇÃO: AÇÃO IRREVERSÍVEL! Todos os registos de avaliação serão apagados.", async () => {
                 ui.confirmModal.classList.remove('active');
@@ -514,16 +513,11 @@
                 }
             }, 'SIM, APAGAR TUDO', 'danger-btn');
         });
-
-        // --- Modal de Confirmação ---
         ui.confirmCancelBtn.addEventListener('click', () => ui.confirmModal.classList.remove('active'));
         ui.confirmOkBtn.addEventListener('click', () => appState.currentConfirmCallback?.());
-        
-        // --- Inatividade ---
         ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event => window.addEventListener(event, resetInactivityTimer));
     };
     
     // --- INICIALIZAÇÃO ---
     setupEventListeners();
 })();
-
