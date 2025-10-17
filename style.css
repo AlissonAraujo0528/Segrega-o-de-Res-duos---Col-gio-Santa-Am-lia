@@ -17,7 +17,6 @@
     --focus-ring-color: rgba(0, 90, 156, 0.25);
 }
 
-/* --- RESET E ESTILOS BASE --- */
 *, *::before, *::after {
     box-sizing: border-box;
 }
@@ -26,9 +25,10 @@ html {
     scroll-behavior: smooth;
 }
 
+/* --- MELHORIA: Fundo mais moderno --- */
 body {
     font-family: 'Poppins', sans-serif;
-    background-color: var(--klin-bg-light);
+    background: linear-gradient(135deg, #e0eafc, #cfdef3);
     color: var(--text-on-light);
     margin: 0;
     padding: 30px;
@@ -38,7 +38,6 @@ body {
     line-height: 1.6;
 }
 
-/* --- LAYOUT E CONTAINERS PRINCIPAIS --- */
 .container {
     width: 100%;
     max-width: 850px;
@@ -60,7 +59,6 @@ body {
     display: none;
 }
 
-/* --- CABEÇALHO DA APLICAÇÃO --- */
 .header {
     text-align: center;
     font-weight: 600;
@@ -93,19 +91,18 @@ body {
     height: auto;
 }
 
-/* --- ESTILOS DE MODAL (Login, Ranking, Dashboard) --- */
 .auth-modal, .modal {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.5); /* Fundo um pouco mais suave */
     display: none;
     align-items: center;
     justify-content: center;
     z-index: 5000;
-    backdrop-filter: blur(5px);
+    backdrop-filter: blur(8px);
     padding: 15px;
 }
 
@@ -113,16 +110,18 @@ body {
     display: flex;
 }
 
+/* --- MELHORIA: Sombra mais suave e borda de destaque --- */
 .auth-box, .modal-content {
     background: white;
     padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
     width: 100%;
     max-width: 450px;
     text-align: center;
     animation: fadeIn 0.4s cubic-bezier(0.25, 1, 0.5, 1);
-    position: relative; /* Para o botão de fechar */
+    position: relative;
+    border-top: 4px solid var(--klin-primary);
 }
 
 .modal-content {
@@ -166,7 +165,6 @@ body {
     gap: 15px;
 }
 
-/* --- FORMULÁRIOS E INPUTS --- */
 .form-content {
     padding: 30px;
 }
@@ -181,6 +179,7 @@ body {
 .form-group {
     display: flex;
     flex-direction: column;
+    position: relative; /* Para os ícones */
 }
 
 .form-group label {
@@ -200,6 +199,22 @@ body {
     font-family: 'Poppins', sans-serif;
 }
 
+/* --- MELHORIA: Ícones nos campos de login --- */
+.form-group .fa-envelope, .form-group .fa-lock {
+    position: absolute;
+    left: 15px;
+    top: 42px;
+    color: #ccc;
+    transition: color 0.2s;
+}
+.form-group input:focus + i {
+    color: var(--klin-primary);
+}
+.form-group input#email, .form-group input#password {
+    padding-left: 40px;
+}
+
+
 textarea {
     width: 100%;
     resize: vertical;
@@ -212,7 +227,6 @@ input[type="radio"] {
     accent-color: var(--klin-primary);
 }
 
-/* --- BOTÕES E AÇÕES --- */
 .action-btn {
     padding: 14px;
     border: none;
@@ -228,7 +242,7 @@ input[type="radio"] {
     gap: 10px;
     text-decoration: none;
     position: relative;
-    min-height: 53px; /* Altura fixa para evitar pulos de layout */
+    min-height: 53px;
 }
 
 .action-btn:hover:not(:disabled) {
@@ -236,11 +250,13 @@ input[type="radio"] {
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
+/* --- MELHORIA: Feedback visual para botões desativados --- */
 .action-btn:disabled {
     background: #ccc !important;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+    opacity: 0.7;
 }
 
 #logout-btn {
@@ -273,6 +289,7 @@ input[type="radio"] {
 }
 
 .action-btn { flex-grow: 1; }
+#login-btn { background: linear-gradient(135deg, var(--klin-secondary), var(--klin-primary));}
 .submit-btn { background: linear-gradient(135deg, #28a745, #218838); }
 .update-btn { background: linear-gradient(135deg, var(--warning-color), #e0a800); color: #333; }
 .clear-btn { background: linear-gradient(135deg, #6c757d, #5a6268); }
@@ -295,7 +312,6 @@ input[type="radio"] {
 }
 .reset-db-btn:hover { color: #a71d2a; }
 
-/* --- TABELAS (Legend, Evaluation, Ranking) --- */
 .table-wrapper {
     width: 100%;
     overflow-x: auto; 
@@ -358,7 +374,6 @@ input[type="radio"] {
 .action-icon-btn.delete:hover { color: var(--danger-color); }
 .action-icon-btn.edit:hover { color: var(--klin-primary); }
 
-/* --- COMPONENTES DE UI (Notificações, Score, etc.) --- */
 .section-title {
     color: var(--klin-secondary);
     font-weight: 600;
@@ -408,7 +423,6 @@ input[type="radio"] {
 .pagination-controls button:disabled { background-color: #ccc; cursor: not-allowed; }
 #current-page-display { font-weight: 600; color: var(--klin-secondary); }
 
-/* --- NOTIFICAÇÕES FLUTUANTES --- */
 #notification-area {
     position: fixed;
     top: 20px;
@@ -437,7 +451,6 @@ input[type="radio"] {
 .notification.warning { background-color: var(--warning-color); color: var(--text-on-light); }
 .notification.info { background-color: var(--info-color); }
 
-/* --- ACESSIBILIDADE --- */
 :focus-visible {
     outline: 3px solid var(--klin-primary);
     outline-offset: 2px;
@@ -448,7 +461,6 @@ input[type="radio"] {
     outline: none;
 }
 
-/* --- DESIGN RESPONSIVO --- */
 @media (max-width: 900px) {
     body { padding: 20px; }
     .modal-content { max-width: 95%; padding: 30px; }
@@ -470,4 +482,3 @@ input[type="radio"] {
     #logout-btn { padding: 6px 8px; font-size: 0.8em; top: 10px; right: 10px; }
     .close-button { top: 10px; right: 15px; }
 }
-

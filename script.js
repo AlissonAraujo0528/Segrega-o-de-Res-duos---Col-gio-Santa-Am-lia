@@ -60,7 +60,6 @@
     };
 
     // --- FUNÇÕES UTILITÁRIAS ---
-
     const sanitizeHTML = (str) => {
         if (!str) return '';
         const temp = document.createElement('div');
@@ -106,7 +105,6 @@
     };
     
     // --- AUTENTICAÇÃO E SESSÃO ---
-
     const handleLogin = async (event) => {
         event.preventDefault();
         ui.loginError.textContent = '';
@@ -117,7 +115,6 @@
                 password: ui.loginForm.elements.password.value,
             });
             if (error) throw error;
-            // O onAuthStateChange cuidará do resto
         } catch (error) {
             ui.loginError.textContent = 'Email ou senha inválidos.';
             toggleButtonLoading(ui.loginBtn, false);
@@ -138,7 +135,6 @@
         toggleButtonLoading(ui.recoveryBtn, true);
         const email = ui.forgotPasswordForm.elements['recovery-email'].value;
         const redirectTo = 'https://alissonaraujo0528.github.io/Segrega-o-de-Res-duos---Col-gio-Santa-Am-lia/reset-password.html';
-        console.log('Solicitando redefinição de senha. A URL de redirecionamento gerada é:', redirectTo);
         try {
             const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
             if (error) throw error;
@@ -186,7 +182,6 @@
     });
     
     // --- LÓGICA PRINCIPAL DA APLICAÇÃO ---
-
     const initializeAppUI = () => {
         ui.loginModal.classList.remove('active');
         ui.appContainer.classList.remove('hidden');
