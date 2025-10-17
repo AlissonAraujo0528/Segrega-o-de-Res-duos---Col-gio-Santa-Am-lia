@@ -158,7 +158,6 @@
                 .eq('id', user.id)
                 .single();
             
-            // Este é o ponto crucial: se houver um erro ou o perfil for nulo, lançamos um erro claro.
             if (error || !profile) {
                 throw new Error("Perfil de usuário não foi encontrado na base de dados.");
             }
@@ -169,7 +168,6 @@
         } catch (error) {
             console.error("Erro ao procurar perfil:", error);
             showNotification("O seu perfil de utilizador não foi encontrado. Contacte o administrador.", "error");
-            // Força o logout para evitar um estado de "meio logado"
             await supabaseClient.auth.signOut();
         }
     };
@@ -182,7 +180,7 @@
             ui.loginModal.classList.add('active');
             appState.userRole = null;
             clearTimeout(appState.inactivityTimer);
-            toggleButtonLoading(ui.loginBtn, false); // Garante que o botão de login está usável
+            toggleButtonLoading(ui.loginBtn, false);
         }
     });
     
@@ -196,9 +194,6 @@
         ui.adminActionsContainer.style.display = appState.userRole === 'admin' ? 'block' : 'none';
         resetInactivityTimer();
     };
-
-    // ... (O resto do seu código, como calculateScore, handleFormSubmit, etc., permanece o mesmo)
-    // Vou incluir o resto para garantir que o arquivo esteja completo.
 
     const calculateScore = () => {
         const totalScore = [...ui.form.querySelectorAll('input[type="radio"]:checked')].reduce((sum, radio) => sum + parseInt(radio.value, 10), 0);
@@ -238,8 +233,7 @@
             showNotification(appState.currentlyEditingId ? 'Avaliação atualizada com sucesso!' : 'Avaliação guardada com sucesso!');
             resetFormMode();
             if (ui.rankingModal.classList.contains('active')) {
-                displayResults(1, '');
-                ui.rankingFilter.value = '';
+                displayResults(appState.currentPage, ui.rankingFilter.value.trim());
             }
         } catch (error) {
             console.error('Erro ao guardar avaliação:', error);
@@ -283,8 +277,8 @@
 
     const displayResults = async (page = 1, filterText = '') => {
         appState.currentPage = page;
-        ui.resultsBody.innerHTML = ''; // Limpa o corpo da tabela
-        ui.resultsLoader.style.display = 'table-row'; // Mostra o loader
+        ui.resultsBody.innerHTML = '';
+        ui.resultsLoader.style.display = 'table-row';
         ui.paginationControls.style.visibility = 'hidden';
 
         const from = (page - 1) * appState.recordsPerPage;
