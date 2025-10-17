@@ -138,6 +138,7 @@
         toggleButtonLoading(ui.recoveryBtn, true);
         const email = ui.forgotPasswordForm.elements['recovery-email'].value;
         const redirectTo = window.location.href.replace(/index\.html$/, 'reset-password.html');
+        console.log('Solicitando redefinição de senha. A URL de redirecionamento gerada é:', redirectTo);
         try {
             const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
             if (error) throw error;
