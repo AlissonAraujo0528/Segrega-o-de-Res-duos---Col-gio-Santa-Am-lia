@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avaliação de Segregação de Resíduos - KLIN</title>
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" xintegrity="sha384-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKx" crossorigin="anonymous" referrerpolicy="no-referrer">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" xintegrity="sha384-e6nUZs/K4eLLTQL/PAFnnyHhMYoD9TKS2OhpOc6imolM1gHlKVGGmlsePFLzB3pL" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" xintegrity="sha384-ynA2d+34yLd23lJmPjKx22/p3uSj2J2sM5k7B2M2fNfVz/4TzJ4f5i5" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" xintegrity="sha384-I6F5OKECLVtK/BL+8iSLDEHowSAfUo76ZL9+kGAgTRdiByINKJaqTPH/QVNS1VDb" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+</head>
+<body>
+
+    <div id="login-modal" class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+        <div class="auth-box">
+            <img src="KLIN.png" alt="Logo KLIN" style="max-width: 150px; margin-bottom: 20px;">
+            <h2 id="login-title">Segregação de Resíduos - Braskem</h2>
+            <h2>Colégio Santa Amélia</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" autocomplete="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha:</label>
+                    <input type="password" id="password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" id="login-btn">Entrar</button>
+                <p class="error-message" id="login-error"></p>
+                <a href="#" id="forgot-password-link">Esqueci minha senha</a>
+            </form>
+        </div>
+    </div>
+
+    <div id="forgot-password-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="forgot-password-title">
+        <div class="modal-content auth-box">
+            <span class="close-button" aria-label="Fechar">&times;</span>
+            <h2 id="forgot-password-title" class="section-title"><i class="fa-solid fa-envelope"></i> Recuperar Senha</h2>
+            <p>Digite seu e-mail e enviaremos um link para você cadastrar uma nova senha.</p>
+            <form id="forgot-password-form">
+                <div class="form-group">
+                    <label for="recovery-email">Email de recuperação:</label>
+                    <input type="email" id="recovery-email" autocomplete="email" required>
+                </div>
+                <button type="submit" id="recovery-btn" class="action-btn submit-btn">Enviar Link</button>
+                <p class="error-message" id="recovery-error"></p>
+            </form>
+        </div>
+    </div>
+    
+    <main id="app-container" class="hidden">
+        <div class="logo-container">
+            <img src="KLIN.png" alt="Logo KLIN Engenharia e Gestão Ambiental">
+        </div>
+
+        <div id="form-container" class="container">
+            <div class="header">
+                <button id="logout-btn" title="Sair do sistema">
+                    <i class="fa-solid fa-right-from-bracket"></i> Sair
+                </button>
+                <div class="header-top">SISTEMA DE GESTÃO KLIN</div>
+                <div class="header-bottom">Avaliação de Segregação de Resíduos - Braskem | Colégio Santa Amélia</div>
+            </div>
+            <div class="form-content">
+                <form id="evaluation-form">
+                    <table class="legend-table">
+                        <thead><tr><th colspan="2">Critérios de Avaliação</th></tr></thead>
+                        <tbody>
+                            <tr><td><span class="emoji">😐</span> Segregação Regular (Muitos resíduos misturados)</td><td><strong>2 Pontos</strong></td></tr>
+                            <tr><td><span class="emoji">😃</span> Segregação Excelente (Sem contaminações visíveis)</td><td><strong>5 Pontos</strong></td></tr>
+                        </tbody>
+                    </table>
+                    <div class="form-grid">
+                        <div class="form-group"><label for="evaluator">Avaliador:</label><input type="text" id="evaluator" required aria-required="true"></div>
+                        <div class="form-group"><label for="evaluation-date">Data da Avaliação:</label><input type="date" id="evaluation-date" required aria-required="true"></div>
+                        <div class="form-group"><label for="sector">Setor/Sala:</label><input type="text" id="sector" required aria-required="true"></div>
+                        <div class="form-group"><label for="responsible">Responsável <span aria-hidden="true">*</span>:</label><input type="text" id="responsible" required aria-required="true"></div>
+                    </div>
+                    <h3 class="section-title"><i class="fa-solid fa-clipboard-check"></i>AVALIAÇÃO QUALITATIVA</h3>
+                    <table class="evaluation-table">
+                        <thead><tr><th>Item de Avaliação</th><th class="icon-header">😐</th><th class="icon-header">😃</th></tr></thead>
+                        <tbody>
+                            <tr><td>Sem presença de resíduos orgânicos nos coletores de recicláveis</td><td><input type="radio" name="organicos" value="2" required></td><td><input type="radio" name="organicos" value="5"></td></tr>
+                            <tr><td>Sem presença de papéis sanitários nos coletores de recicláveis</td><td><input type="radio" name="sanitarios" value="2" required></td><td><input type="radio" name="sanitarios" value="5"></td></tr>
+                            <tr><td>Sem outros não recicláveis (Ex.: Clipes, fitas adesivas, grampos e etc.)</td><td><input type="radio" name="outros" value="2" required></td><td><input type="radio" name="outros" value="5"></td></tr>
+                            <tr><td>Nível dos coletores adequado (nem vazios, nem transbordando)</td><td><input type="radio" name="nivel" value="2" required></td><td><input type="radio" name="nivel" value="5"></td></tr>
+                        </tbody>
+                    </table>
+                    <div class="score-display">Pontuação Total: <span id="total-score">0</span></div>
+                    <div class="form-group"><label for="observations">Observações:</label><textarea id="observations"></textarea></div>
+                    <div class="button-group">
+                        <button type="button" id="clear-btn" class="action-btn clear-btn"><i class="fa-solid fa-eraser"></i> Limpar</button>
+                        <button type="submit" class="action-btn submit-btn"><i class="fa-solid fa-paper-plane"></i> Enviar Avaliação</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="main-actions">
+            <button id="open-ranking-btn" class="action-btn ranking-btn">Ver Ranking <i class="fa-solid fa-trophy"></i></button>
+            <button id="open-dashboard-btn" class="action-btn dashboard-btn">Ver Dashboard <i class="fa-solid fa-chart-line"></i></button>
+        </div>
+        
+        <div id="ranking-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="ranking-title">
+            <div class="modal-content">
+                <span class="close-button" aria-label="Fechar">&times;</span>
+                <h2 id="ranking-title" class="section-title"><i class="fa-solid fa-ranking-star"></i>Ranking de Salas - Projeto Piloto</h2>
+                
+                <div class="filter-container">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="search" id="ranking-filter" placeholder="Buscar por setor, avaliador...">
+                </div>
+
+                <table class="evaluation-table">
+                    <thead>
+                        <tr><th>Posição</th><th>Setor/Sala</th><th>Pontuação</th><th>Data</th><th>Avaliador</th><th>Ações</th></tr>
+                    </thead>
+                    <tbody id="results-body"></tbody>
+                </table>
+                <div class="modal-footer">
+                    <div class="pagination-controls">
+                        <button id="prev-page-btn" title="Página Anterior">&lt; Ant</button>
+                        <span id="current-page-display">Página 1</span>
+                        <button id="next-page-btn" title="Próxima Página">Próx &gt;</button>
+                    </div>
+                    <button id="export-xls-btn" class="action-btn export-btn"><i class="fa-solid fa-file-excel"></i> Baixar XLS</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="dashboard-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="dashboard-title">
+            <div class="modal-content">
+                <span class="close-button" id="close-dashboard-btn" aria-label="Fechar">&times;</span>
+                <h2 id="dashboard-title" class="section-title"><i class="fa-solid fa-chart-pie"></i>Dashboard de Desempenho</h2>
+                <div class="chart-container"><canvas id="scoreBySectorChart"></canvas></div>
+                <div class="chart-container"><canvas id="scoreOverTimeChart"></canvas></div>
+                <div class="chart-container"><canvas id="worstItemsChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="admin-actions">
+            <button id="reset-db-btn" class="reset-db-btn">
+                <i class="fa-solid fa-triangle-exclamation"></i> Limpar Banco de Dados (Admin)
+            </button>
+        </div>
+    </main>
+
+    <div id="success-notification"></div>
+
+    <script src="script.js" defer></script>
+</body>
+</html>

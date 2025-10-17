@@ -1,0 +1,557 @@
+/* --- FONTES E VARIÁVEIS GLOBAIS --- */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+    --klin-primary: #005A9C;
+    --klin-secondary: #0C4C6C;
+    --klin-bg-light: #f0f4f8;
+    --header-text-color: #343A40;
+    --text-on-dark: #FFFFFF;
+    --text-on-light: #333;
+    --border-color: #DDE6ED;
+    --input-bg: #F9FAFB;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --card-shadow: 0 4px 8px rgba(0,0,0,0.06), 0 10px 20px rgba(0,0,0,0.04);
+    --focus-ring-color: rgba(0, 90, 156, 0.25);
+}
+
+/* --- RESET E ESTILOS BASE --- */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--klin-bg-light);
+    color: var(--text-on-light);
+    margin: 0;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.6;
+}
+
+/* --- LAYOUT E CONTAINERS PRINCIPAIS --- */
+.container {
+    width: 100%;
+    max-width: 850px;
+    background-color: var(--text-on-dark);
+    border-radius: 16px;
+    box-shadow: var(--card-shadow);
+    margin-bottom: 20px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+#app-container {
+    display: contents;
+}
+
+#app-container.hidden {
+    display: none;
+}
+
+/* --- CABEÇALHO DA APLICAÇÃO --- */
+.header {
+    text-align: center;
+    font-weight: 600;
+    color: var(--header-text-color);
+    border-bottom: 1px solid var(--border-color);
+    background: linear-gradient(135deg, #F8FAFC, #E9F6FB);
+    position: relative;
+    padding: 10px;
+}
+
+.header-top {
+    font-size: 1.1em;
+    margin-bottom: 8px;
+}
+
+.header-bottom {
+    background-color: rgba(178, 212, 229, 0.4);
+    padding: 12px;
+    font-size: 1.2em;
+    border-radius: 8px;
+}
+
+.logo-container {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.logo-container img {
+    max-width: 180px;
+    height: auto;
+}
+
+/* --- ESTILOS DE MODAL (Login, Ranking, Dashboard) --- */
+.auth-modal, .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 5000;
+    backdrop-filter: blur(5px);
+    padding: 15px;
+}
+
+.auth-modal.active, .modal.active {
+    display: flex;
+}
+
+.auth-box, .modal-content {
+    background: white;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 450px;
+    text-align: center;
+    animation: fadeIn 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    position: relative; /* Para o botão de fechar */
+}
+
+.modal-content {
+    max-width: 900px; /* Aumentado para melhor visualização em desktop */
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.close-button {
+    color: #aaa;
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 2em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s, transform 0.2s;
+}
+
+.close-button:hover {
+    color: #333;
+    transform: scale(1.1);
+}
+
+.modal-body {
+    overflow-y: auto; /* Permite scroll se o conteúdo for grande */
+    padding-right: 10px; /* Evita que o scrollbar sobreponha o conteúdo */
+}
+
+.modal-footer {
+    margin-top: auto; /* Empurra o rodapé para o final */
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* Permite que os itens quebrem linha em telas pequenas */
+    gap: 15px;
+}
+
+/* --- FORMULÁRIOS E INPUTS --- */
+.form-content {
+    padding: 30px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 25px;
+    margin-bottom: 30px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #555;
+}
+
+.form-group input, textarea {
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg);
+    border-radius: 8px;
+    font-size: 1em;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: 'Poppins', sans-serif;
+}
+
+textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 100px;
+}
+
+input[type="radio"] {
+    transform: scale(1.6);
+    cursor: pointer;
+    accent-color: var(--klin-primary);
+}
+
+/* --- BOTÕES E AÇÕES --- */
+.action-btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    color: white;
+    font-size: 1.1em;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-decoration: none;
+}
+
+.action-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.action-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+#logout-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background-color 0.2s;
+}
+#logout-btn:hover {
+    background: #a71d2a;
+}
+
+.button-group, .main-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.main-actions {
+    width: 100%;
+    max-width: 850px;
+    margin-bottom: 20px;
+}
+
+.action-btn { flex-grow: 1; }
+.submit-btn { background: linear-gradient(135deg, #28a745, #218838); }
+.update-btn { background: linear-gradient(135deg, var(--warning-color), #e0a800); color: #333; }
+.clear-btn { background: linear-gradient(135deg, #6c757d, #5a6268); }
+.ranking-btn { background: linear-gradient(135deg, var(--klin-secondary), var(--klin-primary)); }
+.dashboard-btn { background: linear-gradient(135deg, #563d7c, #463164); }
+.export-btn { background: linear-gradient(135deg, #17a2b8, #138496); flex-grow: 0; padding: 12px 25px; }
+
+
+/* --- TABELAS (Legend, Evaluation, Ranking) --- */
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto; /* Garante que a tabela seja rolável em telas pequenas */
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.legend-table, .evaluation-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.legend-table th {
+    background-color: var(--klin-secondary);
+    color: var(--text-on-dark);
+    padding: 12px;
+    font-weight: 600;
+}
+
+.legend-table td {
+    border: 1px solid var(--border-color);
+    padding: 12px;
+    vertical-align: middle;
+    background-color: #fff;
+}
+
+.evaluation-table th, .evaluation-table td {
+    border: 1px solid var(--border-color);
+    padding: 15px;
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap; /* Evita que o conteúdo da célula quebre linha */
+}
+
+.evaluation-table thead {
+    background: linear-gradient(135deg, var(--klin-secondary), var(--klin-primary));
+    color: var(--text-on-dark);
+    font-weight: 600;
+}
+
+.evaluation-table tbody tr:nth-child(even) {
+    background-color: var(--input-bg);
+}
+.evaluation-table tbody tr:hover {
+    background-color: #e9ecef;
+}
+
+.evaluation-table .icon-header {
+    font-size: 1.8em;
+}
+
+.actions-cell {
+    text-align: center;
+}
+
+.action-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px 8px;
+    margin: 0 5px;
+    font-size: 1.2em;
+    color: #777;
+    transition: color 0.2s, transform 0.2s;
+}
+
+.action-icon-btn:hover { transform: scale(1.2); }
+.action-icon-btn.delete:hover { color: var(--danger-color); }
+.action-icon-btn.edit:hover { color: var(--klin-primary); }
+
+/* --- COMPONENTES DE UI (Notificações, Score, etc.) --- */
+.section-title {
+    text-align: center;
+    color: var(--klin-secondary);
+    font-weight: 600;
+    margin: 20px 0 30px 0;
+    font-size: 1.4em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.score-display {
+    background: linear-gradient(135deg, #f0f4f8, #e9f0f6);
+    color: var(--klin-primary);
+    padding: 20px;
+    text-align: center;
+    font-size: 1.4em;
+    font-weight: 700;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 2px solid var(--klin-primary);
+    transition: all 0.3s ease-in-out;
+}
+.score-display span {
+    display: inline-block;
+    transition: transform 0.3s;
+}
+
+#success-notification {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--success-color);
+    color: white;
+    padding: 15px 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    z-index: 6000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s, transform 0.3s;
+}
+
+#success-notification.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, -10px);
+}
+
+.filter-container {
+    position: relative;
+    margin-bottom: 20px;
+}
+.filter-container .fa-search {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #aaa;
+}
+#ranking-filter {
+    width: 100%;
+    padding: 12px 12px 12px 40px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg);
+    border-radius: 8px;
+    font-size: 1em;
+}
+
+.chart-container {
+    margin-bottom: 40px;
+    height: 350px;
+    width: 100%;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.pagination-controls button {
+    background-color: var(--klin-secondary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.pagination-controls button:hover:not(:disabled) {
+    background-color: var(--klin-primary);
+}
+.pagination-controls button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+#current-page-display {
+    font-weight: 600;
+    color: var(--klin-secondary);
+}
+
+/* --- MELHORIAS DE ACESSIBILIDADE --- */
+/* Adiciona um anel de foco visível para navegadores de teclado */
+:focus-visible {
+    outline: 3px solid var(--klin-primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--focus-ring-color);
+}
+/* Remove o anel de foco para usuários de mouse/toque que não precisam dele */
+:focus:not(:focus-visible) {
+    outline: none;
+}
+/* Aplica o anel de foco aos inputs que já têm um box-shadow no :focus */
+.form-group input:focus-visible, textarea:focus-visible {
+    outline: none; /* Mantém o estilo original do box-shadow */
+}
+
+
+/* --- DESIGN RESPONSIVO (MEDIA QUERIES) --- */
+
+/* Tablets e dispositivos menores (até 900px) */
+@media (max-width: 900px) {
+    body {
+        padding: 20px;
+    }
+
+    .modal-content {
+        max-width: 95%;
+        padding: 30px;
+    }
+
+    .form-content {
+        padding: 20px;
+    }
+}
+
+/* Celulares (até 600px) */
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+    
+    .container {
+        border-radius: 10px;
+    }
+
+    .auth-box, .modal-content {
+        padding: 25px;
+        max-height: 95vh;
+    }
+
+    .header-top { font-size: 1em; }
+    .header-bottom { font-size: 1.1em; }
+
+    .form-grid {
+        grid-template-columns: 1fr; /* Uma coluna em telas pequenas */
+        gap: 20px;
+    }
+
+    .main-actions, .button-group {
+        flex-direction: column; /* Empilha os botões */
+    }
+
+    .export-btn {
+        width: 100%;
+    }
+
+    .modal-footer {
+        flex-direction: column;
+        align-items: stretch; /* Faz os botões ocuparem toda a largura */
+    }
+
+    .pagination-controls {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .evaluation-table td, .evaluation-table th {
+        padding: 10px;
+        font-size: 0.9em;
+    }
+
+    #logout-btn {
+        padding: 6px 8px;
+        font-size: 0.8em;
+        top: 10px;
+        right: 10px;
+    }
+
+    .close-button {
+        top: 10px;
+        right: 15px;
+    }
+}
