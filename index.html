@@ -15,11 +15,11 @@
 </head>
 <body>
 
-    <div id="login-modal" class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <div id="login-modal" class="auth-modal active" role="dialog" aria-modal="true" aria-labelledby="login-title">
         <div class="auth-box">
             <img src="KLIN.png" alt="Logo KLIN" style="max-width: 150px; margin-bottom: 20px;">
             <h2 id="login-title">Segregação de Resíduos - Braskem</h2>
-            <h2>Colégio Santa Amélia</h2>
+            <p style="margin-top: -15px; color: #555;">Colégio Santa Amélia</p>
             <form id="login-form">
                 <div class="form-group">
                     <label for="email">Email:</label>
@@ -29,8 +29,8 @@
                     <label for="password">Senha:</label>
                     <input type="password" id="password" autocomplete="current-password" required>
                 </div>
-                <button type="submit" id="login-btn">Entrar</button>
-                <p class="error-message" id="login-error"></p>
+                <button type="submit" id="login-btn" class="action-btn">Entrar</button>
+                <p class="error-message" id="login-error" role="alert"></p>
                 <a href="#" id="forgot-password-link">Esqueci minha senha</a>
             </form>
         </div>
@@ -47,54 +47,54 @@
                     <input type="email" id="recovery-email" autocomplete="email" required>
                 </div>
                 <button type="submit" id="recovery-btn" class="action-btn submit-btn">Enviar Link</button>
-                <p class="error-message" id="recovery-error"></p>
+                <p class="error-message" id="recovery-error" role="alert"></p>
             </form>
         </div>
     </div>
     
     <main id="app-container" class="hidden">
+        <!-- Conteúdo principal da aplicação aqui -->
         <div class="logo-container">
             <img src="KLIN.png" alt="Logo KLIN Engenharia e Gestão Ambiental">
         </div>
 
         <div id="form-container" class="container">
             <div class="header">
-                <button id="logout-btn" title="Sair do sistema">
-                    <i class="fa-solid fa-right-from-bracket"></i> Sair
-                </button>
+                 <button id="logout-btn" title="Sair do sistema"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
                 <div class="header-top">SISTEMA DE GESTÃO KLIN</div>
                 <div class="header-bottom">Avaliação de Segregação de Resíduos - Braskem | Colégio Santa Amélia</div>
             </div>
             <div class="form-content">
                 <form id="evaluation-form">
+                    <!-- ... restante do seu formulário ... -->
                     <table class="legend-table">
                         <thead><tr><th colspan="2">Critérios de Avaliação</th></tr></thead>
                         <tbody>
-                            <tr><td><span class="emoji">😐</span> Segregação Regular (Muitos resíduos misturados)</td><td><strong>2 Pontos</strong></td></tr>
-                            <tr><td><span class="emoji">😃</span> Segregação Excelente (Sem contaminações visíveis)</td><td><strong>5 Pontos</strong></td></tr>
+                            <tr><td><span class="emoji">😐</span> Segregação Regular</td><td><strong>2 Pontos</strong></td></tr>
+                            <tr><td><span class="emoji">😃</span> Segregação Excelente</td><td><strong>5 Pontos</strong></td></tr>
                         </tbody>
                     </table>
                     <div class="form-grid">
-                        <div class="form-group"><label for="evaluator">Avaliador:</label><input type="text" id="evaluator" required aria-required="true"></div>
-                        <div class="form-group"><label for="evaluation-date">Data da Avaliação:</label><input type="date" id="evaluation-date" required aria-required="true"></div>
-                        <div class="form-group"><label for="sector">Setor/Sala:</label><input type="text" id="sector" required aria-required="true"></div>
-                        <div class="form-group"><label for="responsible">Responsável <span aria-hidden="true">*</span>:</label><input type="text" id="responsible" required aria-required="true"></div>
+                        <div class="form-group"><label for="evaluator">Avaliador:</label><input type="text" id="evaluator" required></div>
+                        <div class="form-group"><label for="evaluation-date">Data:</label><input type="date" id="evaluation-date" required></div>
+                        <div class="form-group"><label for="sector">Setor/Sala:</label><input type="text" id="sector" required></div>
+                        <div class="form-group"><label for="responsible">Responsável:</label><input type="text" id="responsible" required></div>
                     </div>
                     <h3 class="section-title"><i class="fa-solid fa-clipboard-check"></i>AVALIAÇÃO QUALITATIVA</h3>
                     <table class="evaluation-table">
-                        <thead><tr><th>Item de Avaliação</th><th class="icon-header">😐</th><th class="icon-header">😃</th></tr></thead>
-                        <tbody>
-                            <tr><td>Sem presença de resíduos orgânicos nos coletores de recicláveis</td><td><input type="radio" name="organicos" value="2" required></td><td><input type="radio" name="organicos" value="5"></td></tr>
-                            <tr><td>Sem presença de papéis sanitários nos coletores de recicláveis</td><td><input type="radio" name="sanitarios" value="2" required></td><td><input type="radio" name="sanitarios" value="5"></td></tr>
-                            <tr><td>Sem outros não recicláveis (Ex.: Clipes, fitas adesivas, grampos e etc.)</td><td><input type="radio" name="outros" value="2" required></td><td><input type="radio" name="outros" value="5"></td></tr>
-                            <tr><td>Nível dos coletores adequado (nem vazios, nem transbordando)</td><td><input type="radio" name="nivel" value="2" required></td><td><input type="radio" name="nivel" value="5"></td></tr>
-                        </tbody>
+                         <thead><tr><th>Item de Avaliação</th><th class="icon-header">😐</th><th class="icon-header">😃</th></tr></thead>
+                         <tbody>
+                            <tr><td>Sem resíduos orgânicos nos recicláveis</td><td><input type="radio" name="organicos" value="2" required></td><td><input type="radio" name="organicos" value="5"></td></tr>
+                            <tr><td>Sem papéis sanitários nos recicláveis</td><td><input type="radio" name="sanitarios" value="2" required></td><td><input type="radio" name="sanitarios" value="5"></td></tr>
+                            <tr><td>Sem outros não recicláveis</td><td><input type="radio" name="outros" value="2" required></td><td><input type="radio" name="outros" value="5"></td></tr>
+                            <tr><td>Nível dos coletores adequado</td><td><input type="radio" name="nivel" value="2" required></td><td><input type="radio" name="nivel" value="5"></td></tr>
+                         </tbody>
                     </table>
                     <div class="score-display">Pontuação Total: <span id="total-score">0</span></div>
                     <div class="form-group"><label for="observations">Observações:</label><textarea id="observations"></textarea></div>
                     <div class="button-group">
                         <button type="button" id="clear-btn" class="action-btn clear-btn"><i class="fa-solid fa-eraser"></i> Limpar</button>
-                        <button type="submit" class="action-btn submit-btn"><i class="fa-solid fa-paper-plane"></i> Enviar Avaliação</button>
+                        <button type="submit" class="action-btn submit-btn"><i class="fa-solid fa-paper-plane"></i> Enviar</button>
                     </div>
                 </form>
             </div>
@@ -105,26 +105,25 @@
             <button id="open-dashboard-btn" class="action-btn dashboard-btn">Ver Dashboard <i class="fa-solid fa-chart-line"></i></button>
         </div>
         
-        <div id="ranking-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="ranking-title">
+        <div id="ranking-modal" class="modal">
             <div class="modal-content">
-                <span class="close-button" aria-label="Fechar">&times;</span>
-                <h2 id="ranking-title" class="section-title"><i class="fa-solid fa-ranking-star"></i>Ranking de Salas - Projeto Piloto</h2>
-                
+                <span class="close-button">&times;</span>
+                <h2 class="section-title"><i class="fa-solid fa-ranking-star"></i>Ranking de Salas</h2>
                 <div class="filter-container">
                     <i class="fa-solid fa-search"></i>
-                    <input type="search" id="ranking-filter" placeholder="Buscar por setor, avaliador...">
+                    <input type="search" id="ranking-filter" placeholder="Buscar por setor ou avaliador...">
                 </div>
-
-                <table class="evaluation-table">
-                    <thead>
-                        <tr><th>Posição</th><th>Setor/Sala</th><th>Pontuação</th><th>Data</th><th>Avaliador</th><th>Ações</th></tr>
-                    </thead>
-                    <tbody id="results-body"></tbody>
-                </table>
+                <div class="table-wrapper">
+                    <table class="evaluation-table">
+                        <thead><tr><th>Pos.</th><th>Setor/Sala</th><th>Pontos</th><th>Data</th><th>Avaliador</th><th>Ações</th></tr></thead>
+                        <tbody id="results-body"></tbody>
+                    </table>
+                </div>
+                <div id="results-loader" style="display: none; text-align: center; padding: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Carregando...</div>
                 <div class="modal-footer">
-                    <div class="pagination-controls">
+                    <div class="pagination-controls" id="pagination-controls">
                         <button id="prev-page-btn" title="Página Anterior">&lt; Ant</button>
-                        <span id="current-page-display">Página 1</span>
+                        <span id="current-page-display">Página 1 de 1</span>
                         <button id="next-page-btn" title="Próxima Página">Próx &gt;</button>
                     </div>
                     <button id="export-xls-btn" class="action-btn export-btn"><i class="fa-solid fa-file-excel"></i> Baixar XLS</button>
@@ -132,25 +131,35 @@
             </div>
         </div>
 
-        <div id="dashboard-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="dashboard-title">
-            <div class="modal-content">
-                <span class="close-button" id="close-dashboard-btn" aria-label="Fechar">&times;</span>
-                <h2 id="dashboard-title" class="section-title"><i class="fa-solid fa-chart-pie"></i>Dashboard de Desempenho</h2>
+        <div id="dashboard-modal" class="modal">
+             <div class="modal-content">
+                <span class="close-button" id="close-dashboard-btn">&times;</span>
+                <h2 class="section-title"><i class="fa-solid fa-chart-pie"></i>Dashboard</h2>
                 <div class="chart-container"><canvas id="scoreBySectorChart"></canvas></div>
                 <div class="chart-container"><canvas id="scoreOverTimeChart"></canvas></div>
                 <div class="chart-container"><canvas id="worstItemsChart"></canvas></div>
             </div>
         </div>
 
-        <div class="admin-actions">
-            <button id="reset-db-btn" class="reset-db-btn">
+        <div id="admin-actions" class="admin-actions">
+            <button id="reset-db-btn" class="reset-db-btn" style="display: none;">
                 <i class="fa-solid fa-triangle-exclamation"></i> Limpar Banco de Dados (Admin)
             </button>
         </div>
     </main>
-
-    <div id="success-notification"></div>
+    
+    <div id="notification" class="notification"></div>
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content auth-box" style="max-width: 400px;">
+            <p id="confirm-text" style="font-size: 1.2em; margin-bottom: 25px;"></p>
+            <div class="button-group">
+                <button id="confirm-no-btn" class="action-btn clear-btn">Não</button>
+                <button id="confirm-yes-btn" class="action-btn submit-btn">Sim</button>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js" defer></script>
 </body>
 </html>
+
