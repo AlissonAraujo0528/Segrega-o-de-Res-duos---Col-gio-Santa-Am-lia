@@ -137,7 +137,7 @@
         ui.recoveryError.textContent = '';
         toggleButtonLoading(ui.recoveryBtn, true);
         const email = ui.forgotPasswordForm.elements['recovery-email'].value;
-        const redirectTo = window.location.href.replace(/index\.html$/, 'reset-password.html');
+        const redirectTo = 'https://alissonaraujo0528.github.io/Segrega-o-de-Res-duos---Col-gio-Santa-Am-lia/reset-password.html';
         console.log('Solicitando redefinição de senha. A URL de redirecionamento gerada é:', redirectTo);
         try {
             const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
