@@ -1,4 +1,3 @@
-/* --- FONTES E VARIÁVEIS GLOBAIS --- */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 
 :root {
@@ -13,6 +12,7 @@
     --success-color: #28a745;
     --warning-color: #ffc107;
     --danger-color: #dc3545;
+    --info-color: #17a2b8;
     --card-shadow: 0 4px 8px rgba(0,0,0,0.06), 0 10px 20px rgba(0,0,0,0.04);
     --focus-ring-color: rgba(0, 90, 156, 0.25);
 }
@@ -52,6 +52,8 @@ body {
 
 #app-container {
     display: contents;
+    width: 100%;
+    max-width: 850px;
 }
 
 #app-container.hidden {
@@ -124,7 +126,7 @@ body {
 }
 
 .modal-content {
-    max-width: 900px; /* Aumentado para melhor visualização em desktop */
+    max-width: 900px;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
@@ -144,6 +146,8 @@ body {
     font-weight: bold;
     cursor: pointer;
     transition: color 0.2s, transform 0.2s;
+    border: none;
+    background: none;
 }
 
 .close-button:hover {
@@ -151,19 +155,14 @@ body {
     transform: scale(1.1);
 }
 
-.modal-body {
-    overflow-y: auto; /* Permite scroll se o conteúdo for grande */
-    padding-right: 10px; /* Evita que o scrollbar sobreponha o conteúdo */
-}
-
 .modal-footer {
-    margin-top: auto; /* Empurra o rodapé para o final */
+    margin-top: auto; 
     padding-top: 20px;
     border-top: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap; /* Permite que os itens quebrem linha em telas pequenas */
+    flex-wrap: wrap; 
     gap: 15px;
 }
 
@@ -188,6 +187,7 @@ body {
     margin-bottom: 8px;
     font-weight: 500;
     color: #555;
+    text-align: left;
 }
 
 .form-group input, textarea {
@@ -214,7 +214,6 @@ input[type="radio"] {
 
 /* --- BOTÕES E AÇÕES --- */
 .action-btn {
-    width: 100%;
     padding: 14px;
     border: none;
     color: white;
@@ -228,6 +227,8 @@ input[type="radio"] {
     justify-content: center;
     gap: 10px;
     text-decoration: none;
+    position: relative;
+    min-height: 53px; /* Altura fixa para evitar pulos de layout */
 }
 
 .action-btn:hover:not(:disabled) {
@@ -236,7 +237,7 @@ input[type="radio"] {
 }
 
 .action-btn:disabled {
-    background: #ccc;
+    background: #ccc !important;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -248,15 +249,12 @@ input[type="radio"] {
     right: 15px;
     background: var(--danger-color);
     color: white;
-    border: none;
     border-radius: 6px;
     padding: 8px 12px;
-    cursor: pointer;
     font-size: 0.9em;
-    display: flex;
-    align-items: center;
     gap: 5px;
     transition: background-color 0.2s;
+    min-height: auto;
 }
 #logout-btn:hover {
     background: #a71d2a;
@@ -281,45 +279,53 @@ input[type="radio"] {
 .ranking-btn { background: linear-gradient(135deg, var(--klin-secondary), var(--klin-primary)); }
 .dashboard-btn { background: linear-gradient(135deg, #563d7c, #463164); }
 .export-btn { background: linear-gradient(135deg, #17a2b8, #138496); flex-grow: 0; padding: 12px 25px; }
+.danger-btn { background: linear-gradient(135deg, var(--danger-color), #a71d2a); }
+.warning-btn { background: linear-gradient(135deg, var(--warning-color), #e0a800); color: #333; }
 
+.admin-actions { text-align: center; }
+.reset-db-btn {
+    background: none;
+    border: none;
+    color: var(--danger-color);
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 0.9em;
+    text-decoration: underline;
+    padding: 10px;
+}
+.reset-db-btn:hover { color: #a71d2a; }
 
 /* --- TABELAS (Legend, Evaluation, Ranking) --- */
 .table-wrapper {
     width: 100%;
-    overflow-x: auto; /* Garante que a tabela seja rolável em telas pequenas */
+    overflow-x: auto; 
     border: 1px solid var(--border-color);
     border-radius: 8px;
+    margin-bottom: 20px;
 }
 
 .legend-table, .evaluation-table {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 30px;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
+.legend-table th, .legend-table td {
+    border: 1px solid var(--border-color);
+    padding: 12px;
+    vertical-align: middle;
+}
 .legend-table th {
     background-color: var(--klin-secondary);
     color: var(--text-on-dark);
-    padding: 12px;
     font-weight: 600;
 }
-
-.legend-table td {
-    border: 1px solid var(--border-color);
-    padding: 12px;
-    vertical-align: middle;
-    background-color: #fff;
-}
+.legend-table { margin-bottom: 30px; }
 
 .evaluation-table th, .evaluation-table td {
-    border: 1px solid var(--border-color);
     padding: 15px;
     text-align: left;
     vertical-align: middle;
-    white-space: nowrap; /* Evita que o conteúdo da célula quebre linha */
+    white-space: nowrap; 
 }
 
 .evaluation-table thead {
@@ -328,42 +334,35 @@ input[type="radio"] {
     font-weight: 600;
 }
 
-.evaluation-table tbody tr:nth-child(even) {
-    background-color: var(--input-bg);
-}
-.evaluation-table tbody tr:hover {
-    background-color: #e9ecef;
-}
+.evaluation-table tbody tr:nth-child(even) { background-color: var(--input-bg); }
+.evaluation-table tbody tr:hover { background-color: #e9ecef; }
+.evaluation-table .icon-header { font-size: 1.5em; text-align: center; }
+.evaluation-table td:nth-child(2), .evaluation-table td:nth-child(3) { text-align: center; }
 
-.evaluation-table .icon-header {
-    font-size: 1.8em;
-}
-
-.actions-cell {
-    text-align: center;
-}
-
-.action-icon-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 5px 8px;
-    margin: 0 5px;
+#results-loader td {
+    text-align: center !important;
+    padding: 40px;
     font-size: 1.2em;
     color: #777;
-    transition: color 0.2s, transform 0.2s;
+    white-space: normal;
 }
 
+.actions-cell { text-align: center; }
+.action-icon-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 5px 8px; margin: 0 5px;
+    font-size: 1.2em; color: #777;
+    transition: color 0.2s, transform 0.2s;
+}
 .action-icon-btn:hover { transform: scale(1.2); }
 .action-icon-btn.delete:hover { color: var(--danger-color); }
 .action-icon-btn.edit:hover { color: var(--klin-primary); }
 
 /* --- COMPONENTES DE UI (Notificações, Score, etc.) --- */
 .section-title {
-    text-align: center;
     color: var(--klin-secondary);
     font-weight: 600;
-    margin: 20px 0 30px 0;
+    margin: 0 0 30px 0;
     font-size: 1.4em;
     display: flex;
     align-items: center;
@@ -379,179 +378,96 @@ input[type="radio"] {
     font-size: 1.4em;
     font-weight: 700;
     border-radius: 8px;
-    margin-bottom: 20px;
+    margin: 20px 0;
     border: 2px solid var(--klin-primary);
     transition: all 0.3s ease-in-out;
 }
-.score-display span {
-    display: inline-block;
-    transition: transform 0.3s;
+.score-display span { display: inline-block; transition: transform 0.3s; }
+
+.filter-container { position: relative; margin-bottom: 20px; }
+.filter-container .fa-search {
+    position: absolute; left: 15px; top: 50%;
+    transform: translateY(-50%); color: #aaa;
+}
+#ranking-filter {
+    width: 100%; padding: 12px 12px 12px 40px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg);
+    border-radius: 8px; font-size: 1em;
 }
 
-#success-notification {
+.chart-container { margin-bottom: 40px; height: 350px; width: 100%; }
+
+.pagination-controls { display: flex; align-items: center; gap: 10px; }
+.pagination-controls button {
+    background-color: var(--klin-secondary); color: white;
+    border: none; border-radius: 6px; padding: 8px 12px;
+    cursor: pointer; transition: background-color 0.2s;
+}
+.pagination-controls button:hover:not(:disabled) { background-color: var(--klin-primary); }
+.pagination-controls button:disabled { background-color: #ccc; cursor: not-allowed; }
+#current-page-display { font-weight: 600; color: var(--klin-secondary); }
+
+/* --- NOTIFICAÇÕES FLUTUANTES --- */
+#notification-area {
     position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 20px;
+    right: 20px;
+    z-index: 7000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.notification {
     background-color: var(--success-color);
     color: white;
     padding: 15px 25px;
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    z-index: 6000;
     opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s, visibility 0.3s, transform 0.3s;
+    transform: translateX(100%);
+    transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    min-width: 250px;
+    text-align: center;
 }
+.notification.show { opacity: 1; transform: translateX(0); }
+.notification.error { background-color: var(--danger-color); }
+.notification.warning { background-color: var(--warning-color); color: var(--text-on-light); }
+.notification.info { background-color: var(--info-color); }
 
-#success-notification.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translate(-50%, -10px);
-}
-
-.filter-container {
-    position: relative;
-    margin-bottom: 20px;
-}
-.filter-container .fa-search {
-    position: absolute;
-    left: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #aaa;
-}
-#ranking-filter {
-    width: 100%;
-    padding: 12px 12px 12px 40px;
-    border: 1px solid var(--border-color);
-    background-color: var(--input-bg);
-    border-radius: 8px;
-    font-size: 1em;
-}
-
-.chart-container {
-    margin-bottom: 40px;
-    height: 350px;
-    width: 100%;
-}
-
-.pagination-controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.pagination-controls button {
-    background-color: var(--klin-secondary);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 12px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-.pagination-controls button:hover:not(:disabled) {
-    background-color: var(--klin-primary);
-}
-.pagination-controls button:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-}
-#current-page-display {
-    font-weight: 600;
-    color: var(--klin-secondary);
-}
-
-/* --- MELHORIAS DE ACESSIBILIDADE --- */
-/* Adiciona um anel de foco visível para navegadores de teclado */
+/* --- ACESSIBILIDADE --- */
 :focus-visible {
     outline: 3px solid var(--klin-primary);
     outline-offset: 2px;
     box-shadow: 0 0 0 4px var(--focus-ring-color);
 }
-/* Remove o anel de foco para usuários de mouse/toque que não precisam dele */
-:focus:not(:focus-visible) {
+:focus:not(:focus-visible) { outline: none; }
+.form-group input:focus-visible, textarea:focus-visible, #ranking-filter:focus-visible {
     outline: none;
 }
-/* Aplica o anel de foco aos inputs que já têm um box-shadow no :focus */
-.form-group input:focus-visible, textarea:focus-visible {
-    outline: none; /* Mantém o estilo original do box-shadow */
-}
 
-
-/* --- DESIGN RESPONSIVO (MEDIA QUERIES) --- */
-
-/* Tablets e dispositivos menores (até 900px) */
+/* --- DESIGN RESPONSIVO --- */
 @media (max-width: 900px) {
-    body {
-        padding: 20px;
-    }
-
-    .modal-content {
-        max-width: 95%;
-        padding: 30px;
-    }
-
-    .form-content {
-        padding: 20px;
-    }
+    body { padding: 20px; }
+    .modal-content { max-width: 95%; padding: 30px; }
+    .form-content { padding: 20px; }
 }
 
-/* Celulares (até 600px) */
 @media (max-width: 600px) {
-    body {
-        padding: 10px;
-    }
-    
-    .container {
-        border-radius: 10px;
-    }
-
-    .auth-box, .modal-content {
-        padding: 25px;
-        max-height: 95vh;
-    }
-
+    body { padding: 10px; }
+    .container { border-radius: 10px; }
+    .auth-box, .modal-content { padding: 25px; max-height: 95vh; }
     .header-top { font-size: 1em; }
     .header-bottom { font-size: 1.1em; }
-
-    .form-grid {
-        grid-template-columns: 1fr; /* Uma coluna em telas pequenas */
-        gap: 20px;
-    }
-
-    .main-actions, .button-group {
-        flex-direction: column; /* Empilha os botões */
-    }
-
-    .export-btn {
-        width: 100%;
-    }
-
-    .modal-footer {
-        flex-direction: column;
-        align-items: stretch; /* Faz os botões ocuparem toda a largura */
-    }
-
-    .pagination-controls {
-        justify-content: center;
-        width: 100%;
-    }
-
-    .evaluation-table td, .evaluation-table th {
-        padding: 10px;
-        font-size: 0.9em;
-    }
-
-    #logout-btn {
-        padding: 6px 8px;
-        font-size: 0.8em;
-        top: 10px;
-        right: 10px;
-    }
-
-    .close-button {
-        top: 10px;
-        right: 15px;
-    }
+    .form-grid { grid-template-columns: 1fr; gap: 20px; }
+    .main-actions, .button-group { flex-direction: column; }
+    .export-btn { width: 100%; }
+    .modal-footer { flex-direction: column; align-items: stretch; }
+    .pagination-controls { justify-content: center; width: 100%; }
+    .evaluation-table td, .evaluation-table th { padding: 10px; font-size: 0.9em; }
+    #logout-btn { padding: 6px 8px; font-size: 0.8em; top: 10px; right: 10px; }
+    .close-button { top: 10px; right: 15px; }
 }
+

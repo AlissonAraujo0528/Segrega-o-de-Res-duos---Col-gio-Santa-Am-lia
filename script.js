@@ -8,7 +8,6 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // --- ESTADO DA APLICAÇÃO ---
-    // Centraliza todo o estado dinâmico para fácil gerenciamento.
     const appState = {
         userRole: null,
         currentlyEditingId: null,
@@ -21,7 +20,6 @@
     };
 
     // --- SELETORES DE ELEMENTOS DOM ---
-    // Agrupa todos os seletores para fácil acesso e manutenção.
     const ui = {
         loginModal: document.getElementById('login-modal'),
         loginForm: document.getElementById('login-form'),
@@ -32,171 +30,139 @@
         forgotPasswordForm: document.getElementById('forgot-password-form'),
         recoveryBtn: document.getElementById('recovery-btn'),
         recoveryError: document.getElementById('recovery-error'),
-        closeForgotPasswordModal: document.querySelector('#forgot-password-modal .close-button'),
-        
         appContainer: document.getElementById('app-container'),
         logoutBtn: document.getElementById('logout-btn'),
-        
         form: document.getElementById('evaluation-form'),
         totalScoreSpan: document.getElementById('total-score'),
         evaluationDateInput: document.getElementById('evaluation-date'),
         submitBtn: document.querySelector('#evaluation-form button[type="submit"]'),
         clearBtn: document.getElementById('clear-btn'),
-        
         rankingModal: document.getElementById('ranking-modal'),
         openRankingBtn: document.getElementById('open-ranking-btn'),
-        closeRankingBtn: document.querySelector('#ranking-modal .close-button'),
         resultsBody: document.getElementById('results-body'),
         resultsLoader: document.getElementById('results-loader'),
         exportBtn: document.getElementById('export-xls-btn'),
         rankingFilter: document.getElementById('ranking-filter'),
-        
         dashboardModal: document.getElementById('dashboard-modal'),
         openDashboardBtn: document.getElementById('open-dashboard-btn'),
-        closeDashboardBtn: document.getElementById('close-dashboard-btn'),
-        
         paginationControls: document.getElementById('pagination-controls'),
         prevPageBtn: document.getElementById('prev-page-btn'),
         nextPageBtn: document.getElementById('next-page-btn'),
         currentPageDisplay: document.getElementById('current-page-display'),
-        
         adminActionsContainer: document.getElementById('admin-actions'),
         resetDbBtn: document.getElementById('reset-db-btn'),
-
-        notification: document.getElementById('notification'),
+        notificationArea: document.getElementById('notification-area'),
         confirmModal: document.getElementById('confirm-modal'),
-        confirmText: document.getElementById('confirm-text'),
-        confirmYesBtn: document.getElementById('confirm-yes-btn'),
-        confirmNoBtn: document.getElementById('confirm-no-btn'),
+        confirmTitle: document.getElementById('confirm-title'),
+        confirmMessage: document.getElementById('confirm-message'),
+        confirmOkBtn: document.getElementById('confirm-ok-btn'),
+        confirmCancelBtn: document.getElementById('confirm-cancel-btn'),
     };
 
     // --- FUNÇÕES UTILITÁRIAS ---
 
-    /**
-     * Sanitiza uma string para prevenir XSS, removendo tags HTML.
-     * @param {string} str A string a ser sanitizada.
-     * @returns {string} A string sanitizada.
-     */
     const sanitizeHTML = (str) => {
+        if (!str) return '';
         const temp = document.createElement('div');
         temp.textContent = str;
         return temp.innerHTML;
     };
 
-    /**
-     * Exibe uma notificação não-bloqueante na tela.
-     * @param {string} message A mensagem a ser exibida.
-     * @param {string} type O tipo de notificação ('success' ou 'error').
-     */
     const showNotification = (message, type = 'success') => {
-        ui.notification.textContent = sanitizeHTML(message);
-        ui.notification.className = `notification show ${type}`;
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        ui.notificationArea.appendChild(notification);
         setTimeout(() => {
-            ui.notification.classList.remove('show');
-        }, 3500);
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 500);
+            }, 4000);
+        }, 10);
     };
 
-    /**
-     * Exibe um modal de confirmação customizado.
-     * @param {string} message A pergunta de confirmação.
-     * @param {Function} onConfirm O callback a ser executado se o usuário confirmar.
-     */
-    const showConfirmation = (message, onConfirm) => {
-        ui.confirmText.textContent = message;
+    const showConfirmation = (title, message, onConfirm, okBtnText = 'Sim', okBtnClass = 'submit-btn') => {
+        ui.confirmTitle.textContent = title;
+        ui.confirmMessage.textContent = message;
+        ui.confirmOkBtn.textContent = okBtnText;
+        ui.confirmOkBtn.className = `action-btn ${okBtnClass}`;
         appState.currentConfirmCallback = onConfirm;
         ui.confirmModal.classList.add('active');
     };
-    
-    /**
-     * Define o estado de carregamento de um botão.
-     * @param {HTMLButtonElement} button O elemento do botão.
-     * @param {boolean} isLoading Se o botão deve estar em estado de carregamento.
-     * @param {string} [loadingText='Carregando...'] O texto a ser exibido durante o carregamento.
-     */
-    const setButtonLoading = (button, isLoading, loadingText = 'Carregando...') => {
+
+    const toggleButtonLoading = (button, isLoading) => {
+        const textEl = button.querySelector('.btn-text');
+        const loaderEl = button.querySelector('.btn-loader-icon');
         if (isLoading) {
             button.disabled = true;
-            button.dataset.originalHtml = button.innerHTML;
-            button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${sanitizeHTML(loadingText)}`;
+            if (textEl) textEl.style.display = 'none';
+            if (loaderEl) loaderEl.style.display = 'inline-block';
         } else {
             button.disabled = false;
-            button.innerHTML = button.dataset.originalHtml;
+            if (textEl) textEl.style.display = 'inline-block';
+            if (loaderEl) loaderEl.style.display = 'none';
         }
     };
-
+    
     // --- AUTENTICAÇÃO E SESSÃO ---
 
     const handleLogin = async (event) => {
         event.preventDefault();
         ui.loginError.textContent = '';
-        setButtonLoading(ui.loginBtn, true, 'Entrando...');
-        
-        const email = ui.loginForm.elements.email.value;
-        const password = ui.loginForm.elements.password.value;
-
+        toggleButtonLoading(ui.loginBtn, true);
         try {
-            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            const { error } = await supabaseClient.auth.signInWithPassword({
+                email: ui.loginForm.elements.email.value,
+                password: ui.loginForm.elements.password.value,
+            });
             if (error) throw error;
         } catch (error) {
-            ui.loginError.textContent = 'Email ou senha inválidos. Verifique suas credenciais.';
-            setButtonLoading(ui.loginBtn, false);
+            ui.loginError.textContent = 'Email ou senha inválidos.';
+            toggleButtonLoading(ui.loginBtn, false);
         }
     };
 
-    const handleLogout = async (isSilent = false) => {
-        if (isSilent) {
+    const handleLogout = async () => {
+        showConfirmation('Sair do Sistema', 'Deseja realmente sair?', async () => {
+            ui.confirmModal.classList.remove('active');
             clearTimeout(appState.inactivityTimer);
             await supabaseClient.auth.signOut();
-        } else {
-            showConfirmation('Deseja realmente sair do sistema?', async () => {
-                clearTimeout(appState.inactivityTimer);
-                await supabaseClient.auth.signOut();
-            });
-        }
+        }, 'Sair', 'danger-btn');
     };
     
     const handleForgotPassword = async (event) => {
         event.preventDefault();
         ui.recoveryError.textContent = '';
-        setButtonLoading(ui.recoveryBtn, true, 'Enviando...');
-        
+        toggleButtonLoading(ui.recoveryBtn, true);
         const email = ui.forgotPasswordForm.elements['recovery-email'].value;
         const redirectTo = window.location.href.replace(/index\.html$/, 'reset-password.html');
-
         try {
             const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
             if (error) throw error;
-            
-            ui.forgotPasswordModal.classList.remove('active');
-            showNotification('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
+            document.querySelector('#forgot-password-modal').classList.remove('active');
+            showNotification('E-mail de recuperação enviado! Verifique a sua caixa de entrada.');
         } catch (error) {
             ui.recoveryError.textContent = 'Erro ao enviar. Verifique o e-mail digitado.';
         } finally {
-            setButtonLoading(ui.recoveryBtn, false);
+            toggleButtonLoading(ui.recoveryBtn, false);
         }
     };
 
     const checkUserProfileAndInitialize = async (user) => {
         try {
-            const { data: profile, error } = await supabaseClient
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
-
-            if (error || !profile) throw new Error("Perfil de usuário não encontrado.");
-            
+            const { data: profile, error } = await supabaseClient.from('profiles').select('role').eq('id', user.id).single();
+            if (error || !profile) throw new Error("Perfil de utilizador não encontrado.");
             appState.userRole = profile.role;
             initializeAppUI();
-            
         } catch (error) {
-            console.error("Erro ao buscar perfil:", error);
-            showNotification("Seu perfil de usuário não foi encontrado. Contate o administrador.", "error");
+            console.error("Erro ao procurar perfil:", error);
+            showNotification("O seu perfil de utilizador não foi encontrado. Contacte o administrador.", "error");
             await supabaseClient.auth.signOut();
         }
     };
 
-    supabaseClient.auth.onAuthStateChange((event, session) => {
+    supabaseClient.auth.onAuthStateChange((_, session) => {
         if (session?.user) {
             checkUserProfileAndInitialize(session.user);
         } else {
@@ -211,19 +177,16 @@
 
     const initializeAppUI = () => {
         ui.loginModal.classList.remove('active');
+        toggleButtonLoading(ui.loginBtn, false); // Garante que o botão de login seja reativado
         ui.appContainer.classList.remove('hidden');
         ui.evaluationDateInput.max = new Date().toISOString().split("T")[0];
         ui.evaluationDateInput.valueAsDate = new Date();
-        
         ui.adminActionsContainer.style.display = appState.userRole === 'admin' ? 'block' : 'none';
-        
         resetInactivityTimer();
     };
 
     const calculateScore = () => {
-        const totalScore = [...ui.form.querySelectorAll('input[type="radio"]:checked')]
-            .reduce((sum, radio) => sum + parseInt(radio.value, 10), 0);
-        
+        const totalScore = [...ui.form.querySelectorAll('input[type="radio"]:checked')].reduce((sum, radio) => sum + parseInt(radio.value, 10), 0);
         ui.totalScoreSpan.textContent = totalScore;
         ui.totalScoreSpan.style.transform = 'scale(1.1)';
         setTimeout(() => { ui.totalScoreSpan.style.transform = 'scale(1)'; }, 150);
@@ -233,13 +196,10 @@
         e.preventDefault();
         const evaluator = ui.form.elements.evaluator.value.trim();
         const sector = ui.form.elements.sector.value.trim();
-        
         if (!evaluator || !sector) {
             return showNotification('Os campos "Avaliador" e "Setor/Sala" são obrigatórios.', 'error');
         }
-        
-        setButtonLoading(ui.submitBtn, true, appState.currentlyEditingId ? 'Atualizando...' : 'Enviando...');
-        
+        toggleButtonLoading(ui.submitBtn, true);
         const dataToSave = {
             date: ui.evaluationDateInput.value,
             evaluator: sanitizeHTML(evaluator),
@@ -254,27 +214,23 @@
             responsible: sanitizeHTML(ui.form.elements.responsible.value.trim()),
             observations: sanitizeHTML(ui.form.elements.observations.value.trim())
         };
-
         try {
-            const { error } = appState.currentlyEditingId
-                ? await supabaseClient.from('evaluations').update(dataToSave).eq('id', appState.currentlyEditingId)
-                : await supabaseClient.from('evaluations').insert([dataToSave]);
-
+            const query = appState.currentlyEditingId ?
+                supabaseClient.from('evaluations').update(dataToSave).eq('id', appState.currentlyEditingId) :
+                supabaseClient.from('evaluations').insert([dataToSave]);
+            const { error } = await query;
             if (error) throw error;
-
-            showNotification(appState.currentlyEditingId ? 'Avaliação atualizada com sucesso!' : 'Avaliação salva com sucesso!');
+            showNotification(appState.currentlyEditingId ? 'Avaliação atualizada com sucesso!' : 'Avaliação guardada com sucesso!');
             resetFormMode();
-            
-            // Se o ranking estiver aberto, atualiza a lista
             if (ui.rankingModal.classList.contains('active')) {
                 displayResults(1, '');
                 ui.rankingFilter.value = '';
             }
         } catch (error) {
-            console.error('Erro ao salvar avaliação:', error);
-            showNotification('Não foi possível salvar a avaliação. Tente novamente.', 'error');
+            console.error('Erro ao guardar avaliação:', error);
+            showNotification(`Não foi possível guardar a avaliação. ${error.message}`, 'error');
         } finally {
-            setButtonLoading(ui.submitBtn, false);
+            toggleButtonLoading(ui.submitBtn, false);
         }
     };
 
@@ -284,22 +240,16 @@
         ui.totalScoreSpan.textContent = '0';
         ui.evaluationDateInput.max = new Date().toISOString().split("T")[0];
         ui.evaluationDateInput.valueAsDate = new Date();
-        ui.submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Avaliação';
+        const btnText = ui.submitBtn.querySelector('.btn-text');
+        if (btnText) btnText.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Avaliação';
         ui.submitBtn.classList.remove('update-btn');
         ui.submitBtn.classList.add('submit-btn');
     };
-
-    // --- RANKING E DADOS ---
 
     const createResultRowHTML = (evaluation, index, from, page, filterText) => {
         const overallIndex = from + index + 1;
         const medal = (page === 1 && !filterText) ? (['🥇', '🥈', '🥉'][overallIndex - 1] || '') : '';
         const isAdmin = appState.userRole === 'admin';
-        const actionsHTML = isAdmin
-            ? `<button class="action-icon-btn edit" data-id="${evaluation.id}" title="Editar"><i class="fa-solid fa-pencil"></i></button>
-               <button class="action-icon-btn delete" data-id="${evaluation.id}" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>`
-            : '<span>-</span>';
-
         return `
             <tr data-evaluation-id="${evaluation.id}">
                 <td>${filterText ? '-' : overallIndex + 'º'}</td>
@@ -307,14 +257,19 @@
                 <td>${evaluation.score}</td>
                 <td>${new Date(evaluation.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
                 <td>${sanitizeHTML(evaluation.evaluator)}</td>
-                <td class="actions-cell">${actionsHTML}</td>
+                <td class="actions-cell">
+                    ${isAdmin ? `
+                        <button class="action-icon-btn edit" data-id="${evaluation.id}" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                        <button class="action-icon-btn delete" data-id="${evaluation.id}" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>
+                    ` : '<span>-</span>'}
+                </td>
             </tr>`;
     };
 
     const displayResults = async (page = 1, filterText = '') => {
         appState.currentPage = page;
-        ui.resultsLoader.style.display = 'table-row';
         ui.resultsBody.innerHTML = '';
+        ui.resultsLoader.style.display = 'table-row';
         ui.paginationControls.style.visibility = 'hidden';
 
         const from = (page - 1) * appState.recordsPerPage;
@@ -322,8 +277,7 @@
         
         let query = supabaseClient.from('evaluations').select('*', { count: 'exact' });
         if (filterText) {
-            const sanitizedFilter = sanitizeHTML(filterText);
-            query = query.or(`sector.ilike.%${sanitizedFilter}%,evaluator.ilike.%${sanitizedFilter}%`);
+            query = query.or(`sector.ilike.%${filterText}%,evaluator.ilike.%${filterText}%`);
         }
 
         try {
@@ -331,7 +285,6 @@
             if (error) throw error;
 
             ui.exportBtn.disabled = (count === 0);
-
             if (evaluations.length === 0) {
                 ui.resultsBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">${filterText ? 'Nenhum resultado encontrado.' : 'Nenhuma avaliação cadastrada.'}</td></tr>`;
             } else {
@@ -343,27 +296,27 @@
             ui.prevPageBtn.disabled = appState.currentPage === 1;
             ui.nextPageBtn.disabled = appState.currentPage >= totalPages;
             ui.paginationControls.style.visibility = 'visible';
-
         } catch (error) {
             console.error("Erro ao carregar ranking:", error);
-            ui.resultsBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: red;">Falha ao carregar dados. Tente novamente.</td></tr>`;
+            ui.resultsBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--danger-color);">Falha ao carregar dados. Tente novamente.</td></tr>`;
         } finally {
             ui.resultsLoader.style.display = 'none';
         }
     };
 
     const handleDelete = (idToDelete) => {
-        showConfirmation('Tem certeza que deseja excluir este registro? A ação é irreversível.', async () => {
+        showConfirmation('Excluir Registo', 'Tem a certeza que deseja excluir este registo? A ação é irreversível.', async () => {
+            ui.confirmModal.classList.remove('active');
             try {
                 const { error } = await supabaseClient.from('evaluations').delete().eq('id', idToDelete);
                 if (error) throw error;
-                showNotification("Registro excluído com sucesso!");
+                showNotification("Registo excluído com sucesso!");
                 displayResults(appState.currentPage, ui.rankingFilter.value.trim());
             } catch (error) {
                 console.error('Erro ao excluir:', error);
-                showNotification('Não foi possível excluir. Verifique suas permissões.', 'error');
+                showNotification(`Não foi possível excluir. ${error.message}`, 'error');
             }
-        });
+        }, 'Excluir', 'danger-btn');
     };
     
     const handleEdit = async (idToEdit) => {
@@ -372,76 +325,115 @@
             if (error) throw error;
 
             appState.currentlyEditingId = idToEdit;
-            ui.form.elements.evaluator.value = evaluation.evaluator;
+            Object.keys(evaluation).forEach(key => {
+                const el = ui.form.elements[key];
+                if (el) el.value = evaluation[key] || '';
+            });
             ui.form.elements['evaluation-date'].value = evaluation.date;
-            ui.form.elements.sector.value = evaluation.sector;
-            ui.form.elements.responsible.value = evaluation.responsible || '';
-            ui.form.elements.observations.value = evaluation.observations || '';
-            
+
             const details = evaluation.details || {};
             for (const key in details) {
-                const radioWithValue = ui.form.querySelector(`input[name="${key}"][value="${details[key]}"]`);
-                if (radioWithValue) radioWithValue.checked = true;
+                const radio = ui.form.querySelector(`input[name="${key}"][value="${details[key]}"]`);
+                if (radio) radio.checked = true;
             }
 
-            ui.submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Atualizar Avaliação';
+            const btnText = ui.submitBtn.querySelector('.btn-text');
+            if(btnText) btnText.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Atualizar Avaliação';
             ui.submitBtn.classList.add('update-btn');
             ui.submitBtn.classList.remove('submit-btn');
             
             ui.rankingModal.classList.remove('active');
             ui.form.scrollIntoView({ behavior: 'smooth' });
             calculateScore();
-
         } catch (error) {
             console.error("Erro ao carregar para edição:", error);
             showNotification('Não foi possível carregar os dados para edição.', 'error');
         }
     };
 
-    // --- DASHBOARD E EXPORTAÇÃO ---
-
     const renderCharts = async () => {
-        // Implementação da renderização de gráficos...
-        // ... (a lógica existente pode ser mantida, mas seria ideal otimizar
-        // para não buscar dados todas as vezes, se não for necessário)
-    };
-
-    const exportToXls = async () => {
-        setButtonLoading(ui.exportBtn, true, 'Exportando...');
         try {
-            const { data: evaluations, error } = await supabaseClient.from('evaluations').select('*').order('score', { ascending: false });
-            if (error || !evaluations || evaluations.length === 0) {
-                throw new Error("Não há dados para exportar ou ocorreu um erro.");
-            }
-            
-            const dataForSheet = evaluations.map((ev, index) => ({
-                'Posição': index + 1,
-                'Setor/Sala': ev.sector,
-                'Responsável': ev.responsible || '',
-                'Pontuação': ev.score,
-                'Data da Avaliação': new Date(ev.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}),
-                'Avaliador': ev.evaluator,
-                'Observações': ev.observations || ''
-            }));
-            
-            const worksheet = XLSX.utils.json_to_sheet(dataForSheet);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Avaliações");
-            worksheet['!cols'] = Object.keys(dataForSheet[0]).map(key => ({ wch: Math.max(key.length, ...dataForSheet.map(row => String(row[key]).length)) + 2 }));
-            XLSX.writeFile(workbook, "Ranking_Segregacao_Residuos.xlsx");
-
+            const { data: evaluations, error } = await supabaseClient.from('evaluations').select('sector, score, date, details');
+            if (error) throw error;
+            if (!evaluations || evaluations.length === 0) return;
+    
+            Object.values(appState.chartInstances).forEach(chart => chart?.destroy());
+    
+            const chartColors = { primary: 'rgba(0, 90, 156, 0.7)', primaryBorder: 'rgba(0, 90, 156, 1)', secondary: 'rgba(86, 61, 124, 0.8)', secondaryBorder: 'rgba(86, 61, 124, 1)', danger: 'rgba(220, 53, 69, 0.7)' };
+            Chart.defaults.font.family = "'Poppins', sans-serif";
+    
+            // Gráfico 1: Pontuação média por setor
+            const sectorData = evaluations.reduce((acc, { sector, score }) => {
+                acc[sector] = acc[sector] || { totalScore: 0, count: 0 };
+                acc[sector].totalScore += score;
+                acc[sector].count++;
+                return acc;
+            }, {});
+            const barLabels = Object.keys(sectorData);
+            const barData = barLabels.map(sector => (sectorData[sector].totalScore / sectorData[sector].count).toFixed(2));
+            appState.chartInstances.scoreBySector = new Chart(document.getElementById('scoreBySectorChart'), { type: 'bar', data: { labels: barLabels, datasets: [{ label: 'Pontuação Média', data: barData, backgroundColor: chartColors.primary }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Pontuação Média por Setor/Sala', font: { size: 16 } } } } });
+    
+            // Gráfico 2: Evolução da pontuação média
+            const timeData = evaluations.reduce((acc, { date, score }) => {
+                const dateKey = new Date(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                acc[dateKey] = acc[dateKey] || { totalScore: 0, count: 0 };
+                acc[dateKey].totalScore += score;
+                acc[dateKey].count++;
+                return acc;
+            }, {});
+            const lineLabels = Object.keys(timeData).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
+            const lineData = lineLabels.map(date => (timeData[date].totalScore / timeData[date].count).toFixed(2));
+            appState.chartInstances.scoreOverTime = new Chart(document.getElementById('scoreOverTimeChart'), { type: 'line', data: { labels: lineLabels, datasets: [{ label: 'Pontuação Média Diária', data: lineData, borderColor: chartColors.secondaryBorder, tension: 0.1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Evolução da Pontuação Média', font: { size: 16 } } } } });
+    
+            // Gráfico 3: Itens com pior desempenho
+            const worstItemsCounter = evaluations.reduce((acc, { details }) => {
+                if (details) {
+                    if (details.organicos === '2') acc['Orgânicos Misturados']++;
+                    if (details.sanitarios === '2') acc['Papéis Sanitários']++;
+                    if (details.outros === '2') acc['Outros Não Recicláveis']++;
+                    if (details.nivel === '2') acc['Nível dos Coletores']++;
+                }
+                return acc;
+            }, { 'Orgânicos Misturados': 0, 'Papéis Sanitários': 0, 'Outros Não Recicláveis': 0, 'Nível dos Coletores': 0 });
+            const pieLabels = Object.keys(worstItemsCounter);
+            const pieData = Object.values(worstItemsCounter);
+            appState.chartInstances.worstItems = new Chart(document.getElementById('worstItemsChart'), { type: 'pie', data: { labels: pieLabels, datasets: [{ label: 'Nº de Avaliações "Regulares"', data: pieData, backgroundColor: [chartColors.danger, chartColors.warning, chartColors.secondary, chartColors.primary] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Itens com Pior Desempenho (Contagem de "Regular")', font: { size: 16 } } } } });
         } catch (error) {
-            console.error("Erro ao exportar:", error);
-            showNotification(error.message, 'error');
-        } finally {
-            setButtonLoading(ui.exportBtn, false);
+            console.error("Erro ao renderizar gráficos:", error);
+            showNotification("Não foi possível carregar os dados do dashboard.", "error");
         }
     };
 
-    // --- GERENCIAMENTO DE INATIVIDADE ---
+    const exportToXls = async () => {
+        toggleButtonLoading(ui.exportBtn, true);
+        try {
+            const { data: evaluations, error } = await supabaseClient.from('evaluations').select('*').order('score', { ascending: false });
+            if (error) throw error;
+            if (!evaluations || evaluations.length === 0) {
+                return showNotification("Não há dados para exportar.", 'warning');
+            }
+            const dataForSheet = evaluations.map((ev, index) => ({
+                'Posição': index + 1, 'Setor/Sala': ev.sector, 'Responsável': ev.responsible || '', 'Pontuação': ev.score,
+                'Data da Avaliação': new Date(ev.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
+                'Avaliador': ev.evaluator, 'Observações': ev.observations || ''
+            }));
+            const worksheet = XLSX.utils.json_to_sheet(dataForSheet);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Avaliações");
+            worksheet['!cols'] = Object.keys(dataForSheet[0]).map(key => ({ wch: Math.max(key.length, ...dataForSheet.map(row => String(row[key] || '').length)) + 2 }));
+            XLSX.writeFile(workbook, "Ranking_Segregacao_Residuos.xlsx");
+        } catch (error) {
+            console.error("Erro ao exportar:", error);
+            showNotification('Não foi possível exportar os dados.', 'error');
+        } finally {
+            toggleButtonLoading(ui.exportBtn, false);
+        }
+    };
+
     const logoutDueToInactivity = () => {
-        showNotification("Você foi desconectado por inatividade.", "error");
-        handleLogout(true);
+        showNotification("Foi desconectado por inatividade.", "warning");
+        clearTimeout(appState.inactivityTimer);
+        supabaseClient.auth.signOut();
     };
 
     const resetInactivityTimer = () => {
@@ -449,28 +441,36 @@
         appState.inactivityTimer = setTimeout(logoutDueToInactivity, INACTIVITY_TIMEOUT_MS);
     };
 
-    // --- SETUP DOS EVENT LISTENERS ---
     const setupEventListeners = () => {
-        // Autenticação
+        // --- Delegação de eventos para botões de fechar modais ---
+        document.body.addEventListener('click', (e) => {
+            if (e.target.matches('.close-button')) {
+                e.target.closest('.modal').classList.remove('active');
+            }
+            if (e.target.matches('.modal')) {
+                e.target.classList.remove('active');
+            }
+        });
+
+        // --- Autenticação ---
         ui.loginForm.addEventListener('submit', handleLogin);
-        ui.logoutBtn.addEventListener('click', () => handleLogout(false));
+        ui.logoutBtn.addEventListener('click', handleLogout);
         ui.forgotPasswordLink.addEventListener('click', (e) => {
             e.preventDefault();
             ui.forgotPasswordForm.reset();
             ui.recoveryError.textContent = '';
             ui.forgotPasswordModal.classList.add('active');
         });
-        ui.closeForgotPasswordModal.addEventListener('click', () => ui.forgotPasswordModal.classList.remove('active'));
         ui.forgotPasswordForm.addEventListener('submit', handleForgotPassword);
 
-        // Formulário Principal
+        // --- Formulário Principal ---
         ui.form.addEventListener('submit', handleFormSubmit);
         ui.form.addEventListener('change', calculateScore);
         ui.clearBtn.addEventListener('click', () => {
-            showConfirmation('Tem certeza que deseja limpar o formulário?', resetFormMode);
+            showConfirmation('Limpar Formulário?', 'Todos os dados não guardados serão perdidos.', resetFormMode, 'Limpar', 'warning-btn');
         });
 
-        // Modais
+        // --- Abertura de Modais ---
         ui.openRankingBtn.addEventListener('click', () => {
             ui.rankingFilter.value = '';
             displayResults(1);
@@ -480,15 +480,11 @@
             renderCharts();
             ui.dashboardModal.classList.add('active');
         });
-        ui.closeRankingBtn.addEventListener('click', () => ui.rankingModal.classList.remove('active'));
-        ui.closeDashboardBtn.addEventListener('click', () => ui.dashboardModal.classList.remove('active'));
-        
-        // Ranking e Ações
+
+        // --- Ranking e Ações ---
         ui.rankingFilter.addEventListener('input', () => {
             clearTimeout(appState.searchDebounceTimer);
-            appState.searchDebounceTimer = setTimeout(() => {
-                displayResults(1, ui.rankingFilter.value.trim());
-            }, 400);
+            appState.searchDebounceTimer = setTimeout(() => displayResults(1, ui.rankingFilter.value.trim()), 400);
         });
         ui.resultsBody.addEventListener('click', (e) => {
             const button = e.target.closest('.action-icon-btn');
@@ -499,49 +495,35 @@
         });
         ui.exportBtn.addEventListener('click', exportToXls);
 
-        // Paginação
-        ui.prevPageBtn.addEventListener('click', () => {
-            if (appState.currentPage > 1) displayResults(appState.currentPage - 1, ui.rankingFilter.value.trim());
-        });
-        ui.nextPageBtn.addEventListener('click', () => {
-            displayResults(appState.currentPage + 1, ui.rankingFilter.value.trim());
-        });
+        // --- Paginação ---
+        ui.prevPageBtn.addEventListener('click', () => { if (appState.currentPage > 1) displayResults(appState.currentPage - 1, ui.rankingFilter.value.trim()); });
+        ui.nextPageBtn.addEventListener('click', () => { displayResults(appState.currentPage + 1, ui.rankingFilter.value.trim()); });
 
-        // Ações de Admin
-        ui.resetDbBtn.addEventListener('click', async () => {
-            showConfirmation("ATENÇÃO: Ação IRREVERSÍVEL! Deseja apagar TODOS os registros?", async () => {
+        // --- Ações de Admin ---
+        ui.resetDbBtn.addEventListener('click', () => {
+            showConfirmation("Limpar Base de Dados?", "ATENÇÃO: AÇÃO IRREVERSÍVEL! Todos os registos de avaliação serão apagados.", async () => {
+                ui.confirmModal.classList.remove('active');
                 try {
-                    // Nota: A função RPC 'delete_all_evaluations' deve existir no Supabase.
                     const { error } = await supabaseClient.rpc('delete_all_evaluations');
                     if (error) throw error;
-                    showNotification("Banco de dados limpo com sucesso!");
+                    showNotification("Base de dados limpa com sucesso!", "warning");
                     displayResults(1, '');
                 } catch (error) {
-                    console.error("Erro ao limpar DB:", error);
-                    showNotification('Não foi possível limpar o banco. Verifique permissões.', 'error');
+                    console.error("Erro ao limpar BD:", error);
+                    showNotification(`Não foi possível limpar a base de dados. ${error.message}`, 'error');
                 }
-            });
+            }, 'SIM, APAGAR TUDO', 'danger-btn');
         });
 
-        // Modal de Confirmação
-        ui.confirmYesBtn.addEventListener('click', () => {
-            if (appState.currentConfirmCallback) {
-                appState.currentConfirmCallback();
-            }
-            ui.confirmModal.classList.remove('active');
-            appState.currentConfirmCallback = null;
-        });
-        ui.confirmNoBtn.addEventListener('click', () => {
-            ui.confirmModal.classList.remove('active');
-            appState.currentConfirmCallback = null;
-        });
+        // --- Modal de Confirmação ---
+        ui.confirmCancelBtn.addEventListener('click', () => ui.confirmModal.classList.remove('active'));
+        ui.confirmOkBtn.addEventListener('click', () => appState.currentConfirmCallback?.());
         
-        // Reset do timer de inatividade
-        ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event =>
-            window.addEventListener(event, resetInactivityTimer)
-        );
+        // --- Inatividade ---
+        ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event => window.addEventListener(event, resetInactivityTimer));
     };
     
     // --- INICIALIZAÇÃO ---
     setupEventListeners();
 })();
+
