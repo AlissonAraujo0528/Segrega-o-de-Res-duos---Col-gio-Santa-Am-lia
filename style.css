@@ -118,6 +118,7 @@ body {
     margin-bottom: 10px;
     padding-bottom: 10px;
     color: var(--klin-primary-deep);
+    border-bottom: 3px solid var(--klin-primary-deep);
 }
 .header-bottom {
     font-size: 1.4em;

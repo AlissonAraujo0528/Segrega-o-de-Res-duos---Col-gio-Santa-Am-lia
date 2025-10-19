@@ -525,7 +525,7 @@
         ui.nextPageBtn.addEventListener('click', () => { if (ui.nextPageBtn.disabled === false) displayResults(appState.currentPage + 1, ui.rankingFilter.value.trim()); });
         ui.resetDbBtn.addEventListener('click', () => {
             showConfirmation("Limpar Base de Dados?", "ATENÇÃO: AÇÃO IRREVERSÍVEL! Todos os registos de avaliação serão apagados.", async () => {
-                ui.confirmModal.classList.remove('active');
+                ui.confirmModal.classList.remove('active'); 
                 try {
                     const { error } = await supabaseClient.rpc('delete_all_evaluations');
                     if (error) throw error;
@@ -537,9 +537,14 @@
                 }
             }, 'SIM, APAGAR TUDO', 'danger-btn');
         });
+        
         ui.confirmCancelBtn.addEventListener('click', () => ui.confirmModal.classList.remove('active'));
-        ui.confirmOkBtn.addEventListener('click', () => appState.currentConfirmCallback?.());
-        ui.confirmModal.classList.remove('active');
+        
+        ui.confirmOkBtn.addEventListener('click', () => {
+            appState.currentConfirmCallback?.();
+            ui.confirmModal.classList.remove('active');
+        });
+        
         ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event => window.addEventListener(event, resetInactivityTimer));
     };
 
