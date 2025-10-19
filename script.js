@@ -209,9 +209,9 @@
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        // --- NOVA VALIDAÇÃO DETALHADA ---
     const evaluator = ui.form.elements.evaluator.value.trim();
     const sector = ui.form.elements.sector.value.trim();
+    const responsible = ui.form.elements.responsible.value.trim();
     const organicos = ui.form.elements.organicos.value;
     const sanitarios = ui.form.elements.sanitarios.value;
     const outros = ui.form.elements.outros.value;
@@ -220,6 +220,7 @@
     let missingFields = [];
     if (!evaluator) missingFields.push('Avaliador');
     if (!sector) missingFields.push('Setor/Sala');
+    if (!responsible) missingFields.push('Responsável');
     if (!organicos) missingFields.push('"Resíduos Orgânicos"');
     if (!sanitarios) missingFields.push('"Papéis Sanitários"');
     if (!outros) missingFields.push('"Outros Não Recicláveis"');
@@ -227,13 +228,12 @@
 
     if (missingFields.length > 0) {
         const message = `Campos obrigatórios não preenchidos: ${missingFields.join(', ')}.`;
-        // Foca no primeiro campo de texto inválido para acessibilidade
         if (!evaluator) ui.form.elements.evaluator.focus();
         else if (!sector) ui.form.elements.sector.focus();
+        else if (!responsible) ui.form.elements.responsible.focus();
         
         return showNotification(message, 'error');
     }
-    // --- FIM DA NOVA VALIDAÇÃO ---
         toggleButtonLoading(ui.submitBtn, true);
         const dataToSave = {
             date: ui.evaluationDateInput.value,
@@ -246,7 +246,7 @@
                 outros: ui.form.elements.outros.value,
                 nivel: ui.form.elements.nivel.value
             },
-            responsible: sanitizeHTML(ui.form.elements.responsible.value.trim()),
+            responsible: sanitizeHTML(responsible),
             observations: sanitizeHTML(ui.form.elements.observations.value.trim())
         };
         try {
@@ -266,7 +266,7 @@
         } finally {
             toggleButtonLoading(ui.submitBtn, false);
         }
-    };
+    };;
 
     const resetFormMode = () => {
         appState.currentlyEditingId = null;
