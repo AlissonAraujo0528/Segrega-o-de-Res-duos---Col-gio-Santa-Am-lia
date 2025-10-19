@@ -148,26 +148,35 @@
     };
 
     const checkUserProfileAndInitialize = async (user) => {
-        try {
-            const { data: profile, error } = await supabaseClient
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
-            
-            if (error || !profile) {
-                throw new Error("Perfil de usuário não foi encontrado na base de dados.");
-            }
-            
+    try {
+        // 1. Modificamos o select para buscar 'role' E 'must_change_password'
+        const { data: profile, error } = await supabaseClient
+            .from('profiles')
+            .select('role, must_change_password') // <-- MUDANÇA AQUI
+            .eq('id', user.id)
+            .single();
+        
+        if (error || !profile) {
+            throw new Error("Perfil de usuário não foi encontrado na base de dados.");
+        }
+
+        // 2. Verificamos a nova flag
+        if (profile.must_change_password) {
+            // Se for true, força o redirecionamento para a troca de senha
+            // A página reset-password.html já detecta um usuário logado
+            window.location.href = 'reset-password.html'; 
+        } else {
+            // Se for false, inicia a aplicação normalmente
             appState.userRole = profile.role;
             initializeAppUI();
-
-        } catch (error) {
-            console.error("Erro ao procurar perfil:", error);
-            showNotification("O seu perfil de utilizador não foi encontrado. Contacte o administrador.", "error");
-            await supabaseClient.auth.signOut();
         }
-    };
+
+    } catch (error) {
+        console.error("Erro ao procurar perfil:", error);
+        showNotification("O seu perfil de utilizador não foi encontrado. Contacte o administrador.", "error");
+        await supabaseClient.auth.signOut();
+    }
+};
 
     supabaseClient.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
@@ -367,7 +376,12 @@
     
             Object.values(appState.chartInstances).forEach(chart => chart?.destroy());
     
-            const chartColors = { primary: 'rgba(0, 90, 156, 0.7)', secondary: 'rgba(86, 61, 124, 0.8)', danger: 'rgba(220, 53, 69, 0.7)', warning: 'rgba(255, 193, 7, 0.7)' };
+            const chartColors = { 
+                primary: 'rgba(141, 110, 99, 0.7)', 
+                secondary: 'rgba(78, 52, 46, 0.8)', 
+                danger: 'rgba(211, 47, 47, 0.7)', 
+                warning: 'rgba(255, 193, 7, 0.7)' 
+            };
             Chart.defaults.font.family = "'Poppins', sans-serif";
     
             const sectorData = evaluations.reduce((acc, { sector, score }) => {

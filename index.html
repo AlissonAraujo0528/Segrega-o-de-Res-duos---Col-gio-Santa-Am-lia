@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="style.css">
     
     <!-- Dependências Externas -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Lora:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
@@ -22,21 +25,21 @@
             <h2 id="login-title">Segregação de Resíduos</h2>
             <p style="margin-top: -15px; margin-bottom: 20px; color: #555;">Braskem | Colégio Santa Amélia</p>
             <form id="login-form">
-    <div class="form-group">
-        <label for="email">Email:</label>
-        <input type="email" id="email" autocomplete="email" required>
-        <i class="fas fa-envelope"></i> </div>
-    <div class="form-group">
-        <label for="password">Senha:</label>
-        <input type="password" id="password" autocomplete="current-password" required>
-        <i class="fas fa-lock"></i> </div>
-    <button type="submit" id="login-btn" class="action-btn">
-        <span class="btn-text">Entrar</span>
-        <i class="fa-solid fa-spinner fa-spin btn-loader-icon" style="display: none;"></i>
-    </button>
-    <p class="error-message" id="login-error" role="alert"></p>
-    <a href="#" id="forgot-password-link">Esqueci minha senha</a>
-</form>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" autocomplete="email" required>
+                    <i class="fas fa-envelope"></i> </div>
+                <div class="form-group">
+                    <label for="password">Senha:</label>
+                    <input type="password" id="password" autocomplete="current-password" required>
+                    <i class="fas fa-lock"></i> </div>
+                <button type="submit" id="login-btn" class="action-btn">
+                    <span class="btn-text">Entrar</span>
+                    <i class="fa-solid fa-spinner fa-spin btn-loader-icon" style="display: none;"></i>
+                </button>
+                <p class="error-message" id="login-error" role="alert"></p>
+                <a href="#" id="forgot-password-link" class="forgot-link">Esqueci minha senha</a>
+            </form>
         </div>
     </div>
 
@@ -143,9 +146,12 @@
             <div class="modal-content">
                 <button class="close-button" id="close-dashboard-btn" aria-label="Fechar">&times;</button>
                 <h2 id="dashboard-title" class="section-title"><i class="fa-solid fa-chart-pie"></i>Dashboard de Desempenho</h2>
-                <div class="chart-container"><canvas id="scoreBySectorChart"></canvas></div>
-                <div class="chart-container"><canvas id="scoreOverTimeChart"></canvas></div>
-                <div class="chart-container"><canvas id="worstItemsChart"></canvas></div>
+                <!-- UX Improvement: Grid layout for charts -->
+                <div class="dashboard-grid">
+                    <div class="chart-container"><canvas id="scoreBySectorChart"></canvas></div>
+                    <div class="chart-container"><canvas id="scoreOverTimeChart"></canvas></div>
+                    <div class="chart-container"><canvas id="worstItemsChart"></canvas></div>
+                </div>
             </div>
         </div>
 
