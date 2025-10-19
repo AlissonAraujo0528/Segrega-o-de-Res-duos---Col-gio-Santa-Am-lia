@@ -104,6 +104,11 @@
         }
     };
     
+    // --- [FUNÇÃO CSS] ---
+    const getCssVariable = (variableName) => {
+        return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+    };
+
     // --- AUTENTICAÇÃO E SESSÃO ---
     const handleLogin = async (event) => {
         event.preventDefault();
@@ -129,6 +134,7 @@
         }, 'Sair', 'danger-btn');
     };
     
+    // --- [FUNÇÃO HANDLEPASSWORD] ---
     const handleForgotPassword = async (event) => {
         event.preventDefault();
         ui.recoveryError.textContent = '';
@@ -149,10 +155,9 @@
 
     const checkUserProfileAndInitialize = async (user) => {
     try {
-        // 1. Modificamos o select para buscar 'role' E 'must_change_password'
         const { data: profile, error } = await supabaseClient
             .from('profiles')
-            .select('role, must_change_password') // <-- MUDANÇA AQUI
+            .select('role, must_change_password')
             .eq('id', user.id)
             .single();
         
@@ -160,13 +165,9 @@
             throw new Error("Perfil de usuário não foi encontrado na base de dados.");
         }
 
-        // 2. Verificamos a nova flag
         if (profile.must_change_password) {
-            // Se for true, força o redirecionamento para a troca de senha
-            // A página reset-password.html já detecta um usuário logado
             window.location.href = 'reset-password.html'; 
         } else {
-            // Se for false, inicia a aplicação normalmente
             appState.userRole = profile.role;
             initializeAppUI();
         }
@@ -266,7 +267,7 @@
         } finally {
             toggleButtonLoading(ui.submitBtn, false);
         }
-    };;
+    };
 
     const resetFormMode = () => {
         appState.currentlyEditingId = null;
@@ -385,6 +386,7 @@
         }
     };
     
+    // --- [FUNÇÃO RENDER CHARTS] ---
     const renderCharts = async () => {
         try {
             const { data: evaluations, error } = await supabaseClient.from('evaluations').select('sector, score, date, details');
@@ -397,12 +399,16 @@
             Object.values(appState.chartInstances).forEach(chart => chart?.destroy());
     
             const chartColors = { 
-                primary: 'rgba(141, 110, 99, 0.7)', 
-                secondary: 'rgba(78, 52, 46, 0.8)', 
-                danger: 'rgba(211, 47, 47, 0.7)', 
-                warning: 'rgba(255, 193, 7, 0.7)' 
+                primary: getCssVariable('--klin-primary-vibrant'), 
+                secondary: getCssVariable('--klin-primary-deep'), 
+                danger: getCssVariable('--danger-color'), 
+                warning: getCssVariable('--warning-color'),
+                primaryOpacity: getCssVariable('--klin-primary-vibrant') + 'B3',
+                dangerOpacity: getCssVariable('--danger-color') + 'B3',
+                warningOpacity: getCssVariable('--warning-color') + 'B3',
+                secondaryOpacity: getCssVariable('--klin-primary-deep') + 'B3'
             };
-            Chart.defaults.font.family = "'Poppins', sans-serif";
+            Chart.defaults.font.family = "'Inter', sans-serif"; 
     
             const sectorData = evaluations.reduce((acc, { sector, score }) => {
                 acc[sector] = acc[sector] || { totalScore: 0, count: 0 };
@@ -412,7 +418,7 @@
             }, {});
             const barLabels = Object.keys(sectorData);
             const barData = barLabels.map(sector => (sectorData[sector].totalScore / sectorData[sector].count).toFixed(2));
-            appState.chartInstances.scoreBySector = new Chart(document.getElementById('scoreBySectorChart'), { type: 'bar', data: { labels: barLabels, datasets: [{ label: 'Pontuação Média', data: barData, backgroundColor: chartColors.primary }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Pontuação Média por Setor/Sala', font: { size: 16 } } } } });
+            appState.chartInstances.scoreBySector = new Chart(document.getElementById('scoreBySectorChart'), { type: 'bar', data: { labels: barLabels, datasets: [{ label: 'Pontuação Média', data: barData, backgroundColor: chartColors.primaryOpacity }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Pontuação Média por Setor/Sala', font: { size: 16 } } } } });
     
             const timeData = evaluations.reduce((acc, { date, score }) => {
                 const dateKey = new Date(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
@@ -436,7 +442,7 @@
             }, { 'Orgânicos Misturados': 0, 'Papéis Sanitários': 0, 'Outros Não Recicláveis': 0, 'Nível dos Coletores': 0 });
             const pieLabels = Object.keys(worstItemsCounter);
             const pieData = Object.values(worstItemsCounter);
-            appState.chartInstances.worstItems = new Chart(document.getElementById('worstItemsChart'), { type: 'pie', data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: [chartColors.danger, chartColors.warning, chartColors.secondary, chartColors.primary] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Itens com Pior Desempenho (Contagem de "Regular")', font: { size: 16 } } } } });
+            appState.chartInstances.worstItems = new Chart(document.getElementById('worstItemsChart'), { type: 'pie', data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: [chartColors.dangerOpacity, chartColors.warningOpacity, chartColors.secondaryOpacity, chartColors.primaryOpacity] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Itens com Pior Desempenho (Contagem de "Regular")', font: { size: 16 } } } } });
         } catch (error) {
             console.error("Erro ao renderizar gráficos:", error);
             showNotification("Não foi possível carregar os dados do dashboard.", "error");
@@ -555,7 +561,7 @@
         iconLight: document.querySelector('#theme-toggle-btn .icon-light'),
 
         init() {
-            if (!this.btn) return; // Failsafe if button not found
+            if (!this.btn) return;
             const savedTheme = localStorage.getItem('klin-theme') || 'light';
             this.applyTheme(savedTheme);
             this.btn.addEventListener('click', () => this.toggle());
