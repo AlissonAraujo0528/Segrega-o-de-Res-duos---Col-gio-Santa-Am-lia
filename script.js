@@ -209,11 +209,31 @@
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        const evaluator = ui.form.elements.evaluator.value.trim();
-        const sector = ui.form.elements.sector.value.trim();
-        if (!evaluator || !sector) {
-            return showNotification('Os campos "Avaliador" e "Setor/Sala" são obrigatórios.', 'error');
-        }
+        // --- NOVA VALIDAÇÃO DETALHADA ---
+    const evaluator = ui.form.elements.evaluator.value.trim();
+    const sector = ui.form.elements.sector.value.trim();
+    const organicos = ui.form.elements.organicos.value;
+    const sanitarios = ui.form.elements.sanitarios.value;
+    const outros = ui.form.elements.outros.value;
+    const nivel = ui.form.elements.nivel.value;
+
+    let missingFields = [];
+    if (!evaluator) missingFields.push('Avaliador');
+    if (!sector) missingFields.push('Setor/Sala');
+    if (!organicos) missingFields.push('"Resíduos Orgânicos"');
+    if (!sanitarios) missingFields.push('"Papéis Sanitários"');
+    if (!outros) missingFields.push('"Outros Não Recicláveis"');
+    if (!nivel) missingFields.push('"Nível dos Coletores"');
+
+    if (missingFields.length > 0) {
+        const message = `Campos obrigatórios não preenchidos: ${missingFields.join(', ')}.`;
+        // Foca no primeiro campo de texto inválido para acessibilidade
+        if (!evaluator) ui.form.elements.evaluator.focus();
+        else if (!sector) ui.form.elements.sector.focus();
+        
+        return showNotification(message, 'error');
+    }
+    // --- FIM DA NOVA VALIDAÇÃO ---
         toggleButtonLoading(ui.submitBtn, true);
         const dataToSave = {
             date: ui.evaluationDateInput.value,
@@ -519,9 +539,43 @@
         });
         ui.confirmCancelBtn.addEventListener('click', () => ui.confirmModal.classList.remove('active'));
         ui.confirmOkBtn.addEventListener('click', () => appState.currentConfirmCallback?.());
+        ui.confirmModal.classList.remove('active');
         ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event => window.addEventListener(event, resetInactivityTimer));
+    };
+
+// --- LÓGICA DE TEMA (DARK/LIGHT MODE) ---
+    const themeToggle = {
+        btn: document.getElementById('theme-toggle-btn'),
+        iconDark: document.querySelector('#theme-toggle-btn .icon-dark'),
+        iconLight: document.querySelector('#theme-toggle-btn .icon-light'),
+
+        init() {
+            if (!this.btn) return; // Failsafe if button not found
+            const savedTheme = localStorage.getItem('klin-theme') || 'light';
+            this.applyTheme(savedTheme);
+            this.btn.addEventListener('click', () => this.toggle());
+        },
+
+        applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('klin-theme', theme);
+            if (theme === 'dark') {
+                this.iconDark.style.display = 'none';
+                this.iconLight.style.display = 'block';
+            } else {
+                this.iconDark.style.display = 'block';
+                this.iconLight.style.display = 'none';
+            }
+        },
+
+        toggle() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            this.applyTheme(newTheme);
+        }
     };
     
     // --- INICIALIZAÇÃO ---
     setupEventListeners();
+    themeToggle.init();
 })();

@@ -115,13 +115,16 @@ body {
 .header-top {
     font-size: 1.1em;
     font-weight: 600;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
     color: var(--klin-primary-deep);
 }
 .header-bottom {
     font-size: 1.4em;
     font-weight: 600;
-    color: var(--text-primary);
+    border-radius: 8px;
+    color: var(--klin-primary-vibrant);
+    border-bottom: 3px solid var(--klin-primary-vibrant);
 }
 
 /* --- 5. MODALS & OVERLAYS --- */
@@ -316,6 +319,11 @@ input[type="radio"] {
 .export-btn { background: var(--info-gradient); flex-grow: 0; padding: 12px 25px; }
 .danger-btn { background: var(--danger-gradient); }
 .warning-btn { background: var(--warning-gradient); color: var(--text-primary); }
+
+#login-btn {
+    width: 100%;
+    align-items: center;
+}
 
 #logout-btn {
     position: absolute;
