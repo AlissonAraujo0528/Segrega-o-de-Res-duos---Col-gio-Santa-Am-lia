@@ -160,6 +160,7 @@ body {
     max-height: 90vh;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
 }
 
 @keyframes fadeIn {
@@ -440,17 +441,18 @@ input[type="radio"] {
 }
 
 .pagination-controls { display: flex; align-items: center; gap: 12px; }
+
 .pagination-controls button {
     background-color: var(--klin-primary-deep); color: white;
     border: none; border-radius: 8px; padding: 10px 15px;
     cursor: pointer; transition: background-color 0.3s;
 }
+
 .pagination-controls button:hover:not(:disabled) { background-color: var(--klin-primary-vibrant); }
 .pagination-controls button:disabled { background-color: #BDBDBD; cursor: not-allowed; }
 #current-page-display { font-weight: 600; color: var(--klin-primary-deep); }
 
 
-/* --- 9. DASHBOARD & MISC --- */
 .section-title {
     color: var(--text-primary);
     font-weight: 600;
@@ -470,6 +472,18 @@ input[type="radio"] {
     padding: 20px;
     border-radius: 12px;
     border: 1px solid var(--border-color);
+}
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    width: 100%;
+}
+
+@media (min-width: 800px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+    }
 }
 
 #notification-area {
