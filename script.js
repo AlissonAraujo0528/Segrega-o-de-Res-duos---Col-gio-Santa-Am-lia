@@ -546,13 +546,29 @@
         
         ui.confirmCancelBtn.addEventListener('click', () => ui.confirmModal.classList.remove('active'));
         
-        ui.confirmOkBtn.addEventListener('click', () => {
-            appState.currentConfirmCallback?.();
-            ui.confirmModal.classList.remove('active');
-        });
-        
-        ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event => window.addEventListener(event, resetInactivityTimer));
-    };
+        ui.confirmOkBtn.addEventListener('click', () => { //
+      appState.currentConfirmCallback?.();
+      ui.confirmModal.classList.remove('active');
+    });
+    
+    ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event => window.addEventListener(event, resetInactivityTimer)); //
+    
+    const loginTogglePassword = document.querySelector('#login-form .toggle-password');
+        if (loginTogglePassword) {
+          loginTogglePassword.addEventListener('click', () => {
+            const targetId = loginTogglePassword.dataset.target;
+            const input = document.getElementById(targetId);
+            if (input && input.type === 'password') {
+              input.type = 'text';
+              loginTogglePassword.classList.replace('fa-eye', 'fa-eye-slash');
+            } else if (input) {
+              input.type = 'password';
+              loginTogglePassword.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+          });
+        }
+
+  }
 
 // --- LÓGICA DE TEMA (DARK/LIGHT MODE) ---
     const themeToggle = {

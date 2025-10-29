@@ -234,6 +234,25 @@ body {
 .form-group input:focus + i { color: var(--klin-primary-vibrant); }
 .form-group input#email, .form-group input#password { padding-left: 45px; }
 
+.form-group .toggle-password {
+    position: absolute;
+    right: 15px;
+    top: 42px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 10;
+    transition: color 0.3s;
+}
+.form-group .toggle-password:hover {
+    color: var(--klin-primary-vibrant);
+}
+
+.form-group input:focus + i { color: var(--klin-primary-vibrant); }
+.form-group input#email, .form-group input#password { padding-left: 45px; }
+
+.form-group input#password, .form-group input#new-password, .form-group input#confirm-password { 
+    padding-right: 45px; 
+}
 textarea {
     width: 100%;
     resize: vertical;
@@ -272,7 +291,7 @@ input[type="radio"] {
 
 /* --- 7. BUTTONS --- */
 .action-btn {
-    padding: 14px;
+    padding: 16px;
     border: none;
     color: var(--text-on-dark);
     font-size: 1.1em;
@@ -303,7 +322,7 @@ input[type="radio"] {
 .button-group, .main-actions {
     display: flex;
     gap: 15px;
-    margin-top: 15px;
+    margin-top: 25px;
 }
 .main-actions {
     width: 100%;
