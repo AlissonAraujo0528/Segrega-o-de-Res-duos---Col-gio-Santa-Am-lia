@@ -160,7 +160,6 @@ body {
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
 }
 
 @keyframes fadeIn {
@@ -478,6 +477,9 @@ input[type="radio"] {
     grid-template-columns: 1fr;
     gap: 20px;
     width: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 @media (min-width: 800px) {
