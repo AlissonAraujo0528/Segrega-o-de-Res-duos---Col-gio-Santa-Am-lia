@@ -5,14 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Avaliação de Segregação de Resíduos - KLIN</title>
     
+    <link rel="icon" type="image/png" href="KLIN.png">
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json"> <!-- Para o PWA -->
     
     <!-- Dependências Externas -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    
+    <!-- Scripts dos Gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    <!-- Plugin para a linha de "Meta" (KPI) -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0/dist/chartjs-plugin-annotation.min.js" defer></script> 
+    
+    <!-- Scripts do Backend -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
 </head>
@@ -28,11 +36,15 @@
                 <div class="form-group">
                     <label for="email">Email:</label>
                     <input type="email" id="email" autocomplete="email" required>
-                    <i class="fas fa-envelope"></i> </div>
+                    <i class="fas fa-envelope"></i> 
+                </div>
                 <div class="form-group">
                     <label for="password">Senha:</label>
                     <input type="password" id="password" autocomplete="current-password" required>
-                    <i class="fas fa-lock"></i> </div>
+                    <i class="fas fa-lock"></i> 
+                    <!-- CORREÇÃO 1: "Olho" movido para DENTRO do form-group -->
+                    <i class="fa-solid fa-eye toggle-password" data-target="password"></i>
+                </div>
                 <button type="submit" id="login-btn" class="action-btn">
                     <span class="btn-text">Entrar</span>
                     <i class="fa-solid fa-spinner fa-spin btn-loader-icon" style="display: none;"></i>
@@ -89,7 +101,13 @@
                     <div class="form-grid">
                         <div class="form-group"><label for="evaluator">Avaliador:</label><input type="text" id="evaluator" required></div>
                         <div class="form-group"><label for="evaluation-date">Data da Avaliação:</label><input type="date" id="evaluation-date" required></div>
-                        <div class="form-group"><label for="sector">Setor/Sala:</label><input type="text" id="sector" required></div>
+                        <!-- CORREÇÃO: Trocado <input> por <select> -->
+                        <div class="form-group">
+                            <label for="sector">Setor/Sala:</label>
+                            <select id="sector" required>
+                                <option value="">Carregando setores...</option>
+                            </select>
+                        </div>
                         <div class="form-group"><label for="responsible">Responsável:</label><input type="text" id="responsible" required></div>
                     </div>
                     <h3 class="section-title"><i class="fa-solid fa-clipboard-check"></i>AVALIAÇÃO QUALITATIVA</h3>
@@ -129,7 +147,6 @@
                     <table class="evaluation-table" aria-label="Tabela de ranking">
                         <thead><tr><th scope="col">Pos.</th><th scope="col">Setor/Sala</th><th scope="col">Pontos</th><th scope="col">Data</th><th scope="col">Avaliador</th><th scope="col">Ações</th></tr></thead>
                         <tbody id="results-body">
-                            <!-- Linhas do ranking serão inseridas aqui pelo JavaScript -->
                             <tr id="results-loader" style="display: none;"><td colspan="6"><i class="fa-solid fa-spinner fa-spin"></i> Carregando...</td></tr>
                         </tbody>
                     </table>
@@ -148,37 +165,46 @@
             </div>
         </div>
 
+        <!-- CORREÇÃO 2: Novo Layout do Dashboard "Leigo-Friendly" -->
         <div id="dashboard-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="dashboard-title">
             <div class="modal-content">
                 <button class="close-button" id="close-dashboard-btn" aria-label="Fechar">&times;</button>
                 <h2 id="dashboard-title" class="section-title"><i class="fa-solid fa-chart-pie"></i>Dashboard de Desempenho</h2>
-                            <div class="dashboard-grid">
                 
-                <div id="kpi-widget-container" class="dashboard-widget kpi-grid">
-                    <div class="kpi-card"><span class="kpi-value">...</span><span class="kpi-label">Carregando...</span></div>
-                </div>
-
-                <div id="medal-board-container" class="dashboard-widget medal-board">
-                    <div class="medal-column gold"><h3>🥇 Salas Ouro</h3><ul><li>...</li></ul></div>
-                    <div class="medal-column silver"><h3>🥈 Salas Prata</h3><ul><li>...</li></ul></div>
-                    <div class="medal-column bronze"><h3>🥉 Salas Bronze</h3><ul><li>...</li></ul></div>
-                </div>
-
-                <div class="dashboard-widget">
-                    <h3 class="widget-title">As 5 Salas com Pior Pontuação Média</h3>
-                    <div class="chart-container">
-                        <canvas id="rankingChart"></canvas>
+                <!-- NOVO LAYOUT DE WIDGETS -->
+                <div class="dashboard-grid">
+                    
+                    <!-- Widget 1: KPIs -->
+                    <div id="kpi-widget-container" class="dashboard-widget full-width kpi-grid">
+                        <!-- KPIs serão preenchidos pelo script.js -->
+                        <div class="kpi-card"><span class="kpi-value">...</span><span class="kpi-label">Carregando...</span></div>
                     </div>
-                </div>
-
-                <div class="dashboard-widget">
-                    <h3 class="widget-title">Maiores Problemas (Contagem de "Regular")</h3>
-                    <div class="chart-container">
-                        <canvas id="worstItemsChart"></canvas>
+    
+                    <!-- Widget 2: Pódio de Medalhas -->
+                    <div id="medal-board-container" class="dashboard-widget full-width medal-board">
+                        <!-- Colunas serão preenchidas pelo script.js -->
+                        <div class="medal-column gold"><h3>🥇 Salas Ouro</h3><ul><li>...</li></ul></div>
+                        <div class="medal-column silver"><h3>🥈 Salas Prata</h3><ul><li>...</li></ul></div>
+                        <div class="medal-column bronze"><h3>🥉 Salas Bronze</h3><ul><li>...</li></ul></div>
                     </div>
-                </div>
+    
+                    <!-- Widget 3: Top 5 Piores -->
+                    <div class="dashboard-widget">
+                        <h3 class="widget-title">As 5 Salas com Pior Pontuação Média</h3>
+                        <div class="chart-container">
+                            <canvas id="rankingChart"></canvas>
+                        </div>
+                    </div>
+    
+                    <!-- Widget 4: Maiores Problemas -->
+                    <div class="dashboard-widget">
+                        <h3 class="widget-title">Maiores Problemas (Contagem de "Regular")</h3>
+                        <div class="chart-container">
+                            <canvas id="worstItemsChart"></canvas>
+                        </div>
+                    </div>
 
-            </div>
+                </div>
             </div>
         </div>
 
@@ -200,6 +226,22 @@
         </div>
     </div>
 
+    <!-- Script principal da aplicação -->
     <script src="script.js" defer></script>
+    
+    <!-- Script para registrar o Service Worker (PWA) -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
+              console.log('ServiceWorker registrado com sucesso: ', registration.scope);
+            })
+            .catch(err => {
+              console.log('Falha ao registrar ServiceWorker: ', err);
+            });
+        });
+      }
+    </script>
 </body>
 </html>

@@ -4,19 +4,24 @@
     // --- CONFIGURAÇÃO E CONSTANTES ---
     const SUPABASE_URL = 'https://hjkulurewbihxpdaqtvk.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhqa3VsdXJld2JpaHhwZGFxdHZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MjMyMDEsImV4cCI6MjA3NjE5OTIwMX0.V3dcIxhbSZ1-HAW4HIVvPSD97le_F1j0QrwCogkvAio';
-    const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos
+    // ATENÇÃO: Confirme que o nome da sua função é 'submit-evaluation'
+    const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/submit-evaluation`;
+    const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // --- ESTADO DA APLICAÇÃO ---
     const appState = {
         userRole: null,
+        currentUserId: null, 
         currentlyEditingId: null,
         currentPage: 1,
         recordsPerPage: 10,
-        chartInstances: {},
+        chartInstances: {}, // Armazena todas as instâncias de gráficos
         searchDebounceTimer: null,
         inactivityTimer: null,
         currentConfirmCallback: null,
+        sectorsList: [], 
+        kpiGoal: 18, 
     };
 
     // --- SELETORES DE ELEMENTOS DOM ---
@@ -37,6 +42,8 @@
         evaluationDateInput: document.getElementById('evaluation-date'),
         submitBtn: document.querySelector('#evaluation-form button[type="submit"]'),
         clearBtn: document.getElementById('clear-btn'),
+        sectorSelect: document.getElementById('sector'), 
+        responsibleInput: document.getElementById('responsible'), 
         rankingModal: document.getElementById('ranking-modal'),
         openRankingBtn: document.getElementById('open-ranking-btn'),
         resultsBody: document.getElementById('results-body'),
@@ -57,6 +64,10 @@
         confirmMessage: document.getElementById('confirm-message'),
         confirmOkBtn: document.getElementById('confirm-ok-btn'),
         confirmCancelBtn: document.getElementById('confirm-cancel-btn'),
+
+        // Seletores do NOVO Dashboard
+        kpiWidgetContainer: document.getElementById('kpi-widget-container'),
+        medalBoardContainer: document.getElementById('medal-board-container')
     };
 
     // --- FUNÇÕES UTILITÁRIAS ---
@@ -104,7 +115,6 @@
         }
     };
     
-    // --- [FUNÇÃO CSS] ---
     const getCssVariable = (variableName) => {
         return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
     };
@@ -126,15 +136,17 @@
         }
     };
 
+    // CORREÇÃO 3: Logout forçado com reload
     const handleLogout = async () => {
         showConfirmation('Sair do Sistema', 'Deseja realmente sair?', async () => {
             ui.confirmModal.classList.remove('active');
             clearTimeout(appState.inactivityTimer);
             await supabaseClient.auth.signOut();
+            // Força a recarga da página para limpar o estado
+            window.location.reload(); 
         }, 'Sair', 'danger-btn');
     };
     
-    // --- [FUNÇÃO HANDLEPASSWORD] ---
     const handleForgotPassword = async (event) => {
         event.preventDefault();
         ui.recoveryError.textContent = '';
@@ -154,30 +166,33 @@
     };
 
     const checkUserProfileAndInitialize = async (user) => {
-    try {
-        const { data: profile, error } = await supabaseClient
-            .from('profiles')
-            .select('role, must_change_password')
-            .eq('id', user.id)
-            .single();
-        
-        if (error || !profile) {
-            throw new Error("Perfil de usuário não foi encontrado na base de dados.");
-        }
+        try {
+            const { data: role, error: roleError } = await supabaseClient.rpc('get_my_role');
+            
+            if (roleError) throw roleError;
+            if (!role) throw new Error("Perfil de usuário não foi encontrado na base de dados.");
 
-        if (profile.must_change_password) {
-            window.location.href = 'reset-password.html'; 
-        } else {
-            appState.userRole = profile.role;
-            initializeAppUI();
-        }
+            const { data: profile, error: profileError } = await supabaseClient
+                .from('profiles')
+                .select('must_change_password')
+                .eq('id', user.id)
+                .single();
 
-    } catch (error) {
-        console.error("Erro ao procurar perfil:", error);
-        showNotification("O seu perfil de utilizador não foi encontrado. Contacte o administrador.", "error");
-        await supabaseClient.auth.signOut();
-    }
-};
+            if (profileError) throw profileError;
+            
+            if (profile.must_change_password) {
+                window.location.href = 'reset-password.html'; 
+            } else {
+                appState.userRole = role;
+                appState.currentUserId = user.id; 
+                initializeAppUI();
+            }
+        } catch (error) {
+            console.error("Erro ao procurar perfil:", error);
+            showNotification("O seu perfil de utilizador não foi encontrado. Contacte o administrador.", "error");
+            await supabaseClient.auth.signOut();
+        }
+    };
 
     supabaseClient.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
@@ -186,18 +201,66 @@
             ui.appContainer.classList.add('hidden');
             ui.loginModal.classList.add('active');
             appState.userRole = null;
+            appState.currentUserId = null; 
             clearTimeout(appState.inactivityTimer);
             toggleButtonLoading(ui.loginBtn, false);
+            // CORREÇÃO 3 (Defesa): Recarrega a página se o estado mudar para SIGNED_OUT
+            if (!ui.appContainer.classList.contains('hidden')) {
+                window.location.reload();
+            }
         }
     });
     
     // --- LÓGICA PRINCIPAL DA APLICAÇÃO ---
+
+    const loadSectors = async () => {
+        const { data, error } = await supabaseClient
+            .from('sectors')
+            .select('id, name, default_responsible');
+            // Removemos .order() para usar o sort natural
+
+        if (error) {
+            console.error('Erro ao carregar setores:', error);
+            ui.sectorSelect.innerHTML = '<option value="">Falha ao carregar setores</option>';
+            return;
+        }
+
+        // CORREÇÃO: Organiza os dados aqui usando "Natural Sort"
+        data.sort((a, b) => {
+            return a.name.localeCompare(b.name, undefined, { numeric: true });
+        });
+
+        appState.sectorsList = data; 
+        ui.sectorSelect.innerHTML = '<option value="">--- Selecione um setor ---</option>';
+        
+        data.forEach(sector => {
+            const option = document.createElement('option');
+            option.value = sector.id;
+            option.textContent = sector.name;
+            ui.sectorSelect.appendChild(option);
+        });
+    };
+
+    const handleSectorChange = () => {
+        const selectedSectorId = ui.sectorSelect.value;
+        const selectedSector = appState.sectorsList.find(s => s.id === selectedSectorId);
+        
+        if (selectedSector && selectedSector.default_responsible) {
+            ui.responsibleInput.value = selectedSector.default_responsible;
+        } else if (!selectedSectorId) {
+            ui.responsibleInput.value = '';
+        }
+    };
+
     const initializeAppUI = () => {
         ui.loginModal.classList.remove('active');
         ui.appContainer.classList.remove('hidden');
         ui.evaluationDateInput.max = new Date().toISOString().split("T")[0];
         ui.evaluationDateInput.valueAsDate = new Date();
         ui.adminActionsContainer.style.display = appState.userRole === 'admin' ? 'block' : 'none';
+        
+        loadSectors(); 
+        
         resetInactivityTimer();
     };
 
@@ -210,60 +273,78 @@
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-    const evaluator = ui.form.elements.evaluator.value.trim();
-    const sector = ui.form.elements.sector.value.trim();
-    const responsible = ui.form.elements.responsible.value.trim();
-    const organicos = ui.form.elements.organicos.value;
-    const sanitarios = ui.form.elements.sanitarios.value;
-    const outros = ui.form.elements.outros.value;
-    const nivel = ui.form.elements.nivel.value;
 
-    let missingFields = [];
-    if (!evaluator) missingFields.push('Avaliador');
-    if (!sector) missingFields.push('Setor/Sala');
-    if (!responsible) missingFields.push('Responsável');
-    if (!organicos) missingFields.push('"Resíduos Orgânicos"');
-    if (!sanitarios) missingFields.push('"Papéis Sanitários"');
-    if (!outros) missingFields.push('"Outros Não Recicláveis"');
-    if (!nivel) missingFields.push('"Nível dos Coletores"');
+        const evaluator = ui.form.elements.evaluator.value.trim();
+        const sector = ui.sectorSelect.value; 
+        const responsible = ui.responsibleInput.value.trim();
+        const organicos = ui.form.elements.organicos.value;
+        const sanitarios = ui.form.elements.sanitarios.value;
+        const outros = ui.form.elements.outros.value;
+        const nivel = ui.form.elements.nivel.value;
 
-    if (missingFields.length > 0) {
-        const message = `Campos obrigatórios não preenchidos: ${missingFields.join(', ')}.`;
-        if (!evaluator) ui.form.elements.evaluator.focus();
-        else if (!sector) ui.form.elements.sector.focus();
-        else if (!responsible) ui.form.elements.responsible.focus();
+        let missingFields = [];
+        if (!evaluator) missingFields.push('Avaliador');
+        if (!sector) missingFields.push('Setor/Sala'); 
+        if (!responsible) missingFields.push('Responsável');
+        if (!organicos) missingFields.push('"Resíduos Orgânicos"');
+        if (!sanitarios) missingFields.push('"Papéis Sanitários"');
+        if (!outros) missingFields.push('"Outros Não Recicláveis"');
+        if (!nivel) missingFields.push('"Nível dos Coletores"');
+
+        if (missingFields.length > 0) {
+            const message = `Campos obrigatórios não preenchidos: ${missingFields.join(', ')}.`;
+            return showNotification(message, 'error');
+        }
         
-        return showNotification(message, 'error');
-    }
-        toggleButtonLoading(ui.submitBtn, true);
-        const dataToSave = {
+        const evaluationData = {
             date: ui.evaluationDateInput.value,
             evaluator: sanitizeHTML(evaluator),
-            sector: sanitizeHTML(sector),
+            sector_id: sector, 
             score: parseInt(ui.totalScoreSpan.textContent, 10),
-            details: {
-                organicos: ui.form.elements.organicos.value,
-                sanitarios: ui.form.elements.sanitarios.value,
-                outros: ui.form.elements.outros.value,
-                nivel: ui.form.elements.nivel.value
-            },
+            details: { organicos, sanitarios, outros, nivel },
             responsible: sanitizeHTML(responsible),
             observations: sanitizeHTML(ui.form.elements.observations.value.trim())
         };
+
+        toggleButtonLoading(ui.submitBtn, true);
+
+        const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+        if (sessionError || !session) {
+            showNotification('Sessão expirada. Faça login novamente.', 'error');
+            toggleButtonLoading(ui.submitBtn, false);
+            handleLogout();
+            return;
+        }
+
         try {
-            const query = appState.currentlyEditingId ?
-                supabaseClient.from('evaluations').update(dataToSave).eq('id', appState.currentlyEditingId) :
-                supabaseClient.from('evaluations').insert([dataToSave]);
-            const { error } = await query;
-            if (error) throw error;
-            showNotification(appState.currentlyEditingId ? 'Avaliação atualizada com sucesso!' : 'Avaliação guardada com sucesso!');
+            const response = await fetch(EDGE_FUNCTION_URL, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    evaluationData: evaluationData,
+                    isUpdate: !!appState.currentlyEditingId,
+                    evaluationId: appState.currentlyEditingId
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Erro desconhecido do servidor.');
+            }
+
+            showNotification(result.message, 'success');
             resetFormMode();
             if (ui.rankingModal.classList.contains('active')) {
                 displayResults(appState.currentPage, ui.rankingFilter.value.trim());
             }
+
         } catch (error) {
-            console.error('Erro ao guardar avaliação:', error);
-            showNotification(`Não foi possível guardar a avaliação. ${error.message}`, 'error');
+            console.error('Erro ao chamar Edge Function:', error);
+            showNotification(`Não foi possível salvar: ${error.message}`, 'error');
         } finally {
             toggleButtonLoading(ui.submitBtn, false);
         }
@@ -285,17 +366,24 @@
         const overallIndex = from + index + 1;
         const medal = (page === 1 && !filterText) ? (['🥇', '🥈', '🥉'][overallIndex - 1] || '') : '';
         const isAdmin = appState.userRole === 'admin';
+        
+        const sectorName = evaluation.sectors ? evaluation.sectors.name : (evaluation.sector || 'Setor Inválido');
+        const isDeleted = !!evaluation.deleted_at;
+        
         return `
-            <tr data-evaluation-id="${evaluation.id}">
+            <tr data-evaluation-id="${evaluation.id}" class="${isDeleted ? 'deleted-row' : ''}" style="${isDeleted ? 'opacity: 0.5; background: #eee;' : ''}">
                 <td>${filterText ? '-' : overallIndex + 'º'}</td>
-                <td>${medal} ${sanitizeHTML(evaluation.sector)}</td>
+                <td>${medal} ${sanitizeHTML(sectorName)} ${isDeleted ? '(Lixeira)' : ''}</td>
                 <td>${evaluation.score}</td>
                 <td>${new Date(evaluation.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
                 <td>${sanitizeHTML(evaluation.evaluator)}</td>
                 <td class="actions-cell">
                     ${isAdmin ? `
-                        <button class="action-icon-btn edit" data-id="${evaluation.id}" title="Editar"><i class="fa-solid fa-pencil"></i></button>
-                        <button class="action-icon-btn delete" data-id="${evaluation.id}" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>
+                        ${isDeleted ?
+                            `<button class="action-icon-btn restore" data-id="${evaluation.id}" title="Restaurar"><i class="fa-solid fa-undo"></i></button>` :
+                            `<button class="action-icon-btn edit" data-id="${evaluation.id}" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                             <button class="action-icon-btn delete" data-id="${evaluation.id}" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>`
+                        }
                     ` : '<span>-</span>'}
                 </td>
             </tr>`;
@@ -310,13 +398,20 @@
         const from = (page - 1) * appState.recordsPerPage;
         const to = from + appState.recordsPerPage - 1;
         
-        let query = supabaseClient.from('evaluations').select('*', { count: 'exact' });
+        let query = supabaseClient
+            .from('evaluations')
+            .select('*, sectors(name)', { count: 'exact' }) 
+            .is('deleted_at', null); 
+
         if (filterText) {
-            query = query.or(`sector.ilike.%${filterText}%,evaluator.ilike.%${filterText}%`);
+            query = query.or(`evaluator.ilike.%${filterText}%,sectors.name.ilike.%${filterText}%`);
         }
 
         try {
-            const { data: evaluations, error, count } = await query.order('score', { ascending: false }).range(from, to);
+            const { data: evaluations, error, count } = await query
+                .order('score', { ascending: false })
+                .range(from, to);
+            
             if (error) throw error;
 
             ui.exportBtn.disabled = (count === 0);
@@ -340,31 +435,59 @@
     };
 
     const handleDelete = (idToDelete) => {
-        showConfirmation('Excluir Registo', 'Tem a certeza que deseja excluir este registo? A ação é irreversível.', async () => {
+        showConfirmation('Mover para Lixeira', 'O registo será movido para a lixeira e poderá ser restaurado. Deseja continuar?', async () => {
             ui.confirmModal.classList.remove('active');
             try {
-                const { error } = await supabaseClient.from('evaluations').delete().eq('id', idToDelete);
+                const { error } = await supabaseClient
+                    .from('evaluations')
+                    .update({ deleted_at: new Date().toISOString() }) 
+                    .eq('id', idToDelete);
+                
                 if (error) throw error;
-                showNotification("Registo excluído com sucesso!");
+                showNotification("Registo movido para a lixeira!");
                 displayResults(appState.currentPage, ui.rankingFilter.value.trim());
             } catch (error) {
-                console.error('Erro ao excluir:', error);
+                console.error('Erro ao mover para lixeira:', error);
                 showNotification(`Não foi possível excluir. ${error.message}`, 'error');
             }
-        }, 'Excluir', 'danger-btn');
+        }, 'Sim, Mover para Lixeira', 'danger-btn');
+    };
+
+    const handleRestore = async (idToRestore) => {
+        try {
+            const { error } = await supabaseClient
+                .from('evaluations')
+                .update({ deleted_at: null }) 
+                .eq('id', idToRestore);
+            
+            if (error) throw error;
+            showNotification("Registo restaurado com sucesso!");
+            displayResults(appState.currentPage, ui.rankingFilter.value.trim()); 
+        } catch (error) {
+            console.error('Erro ao restaurar:', error);
+            showNotification(`Não foi possível restaurar. ${error.message}`, 'error');
+        }
     };
     
     const handleEdit = async (idToEdit) => {
         try {
-            const { data: evaluation, error } = await supabaseClient.from('evaluations').select('*').eq('id', idToEdit).single();
+            const { data: evaluation, error } = await supabaseClient
+                .from('evaluations')
+                .select('*')
+                .eq('id', idToEdit)
+                .single();
             if (error) throw error;
 
             appState.currentlyEditingId = idToEdit;
+            
             Object.keys(evaluation).forEach(key => {
                 const el = ui.form.elements[key];
-                if (el && key !== 'details') el.value = evaluation[key] || '';
+                if (el && key !== 'details' && key !== 'sector_id' && key !== 'sector') { 
+                    el.value = evaluation[key] || '';
+                }
             });
             ui.form.elements['evaluation-date'].value = evaluation.date;
+            ui.sectorSelect.value = evaluation.sector_id; 
 
             const details = evaluation.details || {};
             for (const key in details) {
@@ -386,17 +509,36 @@
         }
     };
     
-    // --- [FUNÇÃO RENDER CHARTS] ---
+    // CORREÇÃO 2: Nova função de renderização do Dashboard
     const renderCharts = async () => {
+        // Limpa gráficos antigos
+        Object.values(appState.chartInstances).forEach(chart => chart?.destroy());
+        
+        // Limpa containers de HTML
+        if (ui.kpiWidgetContainer) ui.kpiWidgetContainer.innerHTML = '<div class="kpi-card"><span class="kpi-value">...</span><span class="kpi-label">Carregando...</span></div>';
+        if (ui.medalBoardContainer) ui.medalBoardContainer.innerHTML = '<div class="medal-column gold"><h3>🥇 Salas Ouro</h3><ul><li>...</li></ul></div><div class="medal-column silver"><h3>🥈 Salas Prata</h3><ul><li>...</li></ul></div><div class="medal-column bronze"><h3>🥉 Salas Bronze</h3><ul><li>...</li></ul></div>';
+
+        // Pega os elementos <canvas> do DOM *depois* de abrir o modal
+        const rankingCanvas = document.getElementById('rankingChart');
+        const worstItemsCanvas = document.getElementById('worstItemsChart');
+
+        // Se os elementos não existirem (modal fechado), não faz nada
+        if (!rankingCanvas || !worstItemsCanvas) {
+            console.log("Dashboard modal não está pronto, pulando renderização.");
+            return; 
+        }
+
         try {
-            const { data: evaluations, error } = await supabaseClient.from('evaluations').select('sector, score, date, details');
+            const { data, error } = await supabaseClient.rpc('get_dashboard_data_v3');
+            
             if (error) throw error;
-            if (!evaluations || evaluations.length === 0) {
+            if (!data) {
                  showNotification("Não há dados suficientes para gerar gráficos.", "info");
+                 // Limpa os "Carregando..."
+                 if (ui.kpiWidgetContainer) ui.kpiWidgetContainer.innerHTML = '';
+                 if (ui.medalBoardContainer) ui.medalBoardContainer.innerHTML = '';
                  return;
             };
-    
-            Object.values(appState.chartInstances).forEach(chart => chart?.destroy());
     
             const chartColors = { 
                 primary: getCssVariable('--klin-primary-vibrant'), 
@@ -406,62 +548,150 @@
                 primaryOpacity: getCssVariable('--klin-primary-vibrant') + 'B3',
                 dangerOpacity: getCssVariable('--danger-color') + 'B3',
                 warningOpacity: getCssVariable('--warning-color') + 'B3',
-                secondaryOpacity: getCssVariable('--klin-primary-deep') + 'B3'
+                secondaryOpacity: getCssVariable('--klin-primary-deep') + 'B3',
+                gold: '#FFD700',
+                silver: '#C0C0C0',
+                bronze: '#CD7F32'
             };
             Chart.defaults.font.family = "'Inter', sans-serif"; 
+            Chart.defaults.color = getCssVariable('--text-secondary'); 
+
+            // --- Widget 1: KPIs ---
+            const kpiData = data.kpis;
+            if (ui.kpiWidgetContainer && kpiData) {
+                ui.kpiWidgetContainer.innerHTML = `
+                    <div class="kpi-card">
+                        <span class="kpi-value">${kpiData.average_score.toFixed(1)}</span>
+                        <span class="kpi-label">Pontuação Média Geral</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-value">${kpiData.success_rate.toFixed(0)}%</span>
+                        <span class="kpi-label">Taxa de Sucesso (Ouro/Prata)</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-value">${kpiData.total_sectors_evaluated}</span>
+                        <span class="kpi-label">Salas Avaliadas</span>
+                    </div>
+                `;
+            }
+
+            // --- Widget 2: Pódio (Quadro de Medalhas) ---
+            const medalData = data.medal_lists;
+            if (ui.medalBoardContainer && medalData) {
+                const createList = (list) => list.length ? list.map(item => `<li>${sanitizeHTML(item)}</li>`).join('') : '<li>Nenhuma</li>';
+                
+                ui.medalBoardContainer.innerHTML = `
+                    <div class="medal-column gold">
+                        <h3>🥇 Salas Ouro (20 pts)</h3>
+                        <ul>${createList(medalData.gold)}</ul>
+                    </div>
+                    <div class="medal-column silver">
+                        <h3>🥈 Salas Prata (14-19 pts)</h3>
+                        <ul>${createList(medalData.silver)}</ul>
+                    </div>
+                    <div class="medal-column bronze">
+                        <h3>🥉 Salas Bronze (<14 pts)</h3>
+                        <ul>${createList(medalData.bronze)}</ul>
+                    </div>
+                `;
+            }
+
+            // --- Widget 3: Top 5 Piores (Gráfico de Barras Horizontais) ---
+            const rankingData = data.worst_5_sectors;
+            if (rankingCanvas && rankingData) {
+                const labels = rankingData.map(d => d.name);
+                const scores = rankingData.map(d => d.average_score.toFixed(1));
+                
+                appState.chartInstances.rankingChart = new Chart(rankingCanvas, { 
+                    type: 'bar', 
+                    data: { 
+                        labels: labels, 
+                        datasets: [{ 
+                            label: 'Pontuação Média', 
+                            data: scores, 
+                            backgroundColor: chartColors.dangerOpacity,
+                            borderColor: chartColors.danger,
+                            borderWidth: 1
+                        }] 
+                    }, 
+                    options: { 
+                        indexAxis: 'y', // <-- Torna o gráfico horizontal
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            legend: { display: false },
+                            title: { display: false }
+                        },
+                        scales: {
+                            x: { max: 20 } // Define a escala máxima em 20
+                        }
+                    } 
+                });
+            }
     
-            const sectorData = evaluations.reduce((acc, { sector, score }) => {
-                acc[sector] = acc[sector] || { totalScore: 0, count: 0 };
-                acc[sector].totalScore += score;
-                acc[sector].count++;
-                return acc;
-            }, {});
-            const barLabels = Object.keys(sectorData);
-            const barData = barLabels.map(sector => (sectorData[sector].totalScore / sectorData[sector].count).toFixed(2));
-            appState.chartInstances.scoreBySector = new Chart(document.getElementById('scoreBySectorChart'), { type: 'bar', data: { labels: barLabels, datasets: [{ label: 'Pontuação Média', data: barData, backgroundColor: chartColors.primaryOpacity }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Pontuação Média por Setor/Sala', font: { size: 16 } } } } });
-    
-            const timeData = evaluations.reduce((acc, { date, score }) => {
-                const dateKey = new Date(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-                acc[dateKey] = acc[dateKey] || { totalScore: 0, count: 0 };
-                acc[dateKey].totalScore += score;
-                acc[dateKey].count++;
-                return acc;
-            }, {});
-            const lineLabels = Object.keys(timeData).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
-            const lineData = lineLabels.map(date => (timeData[date].totalScore / timeData[date].count).toFixed(2));
-            appState.chartInstances.scoreOverTime = new Chart(document.getElementById('scoreOverTimeChart'), { type: 'line', data: { labels: lineLabels, datasets: [{ label: 'Pontuação Média Diária', data: lineData, borderColor: chartColors.secondary, tension: 0.1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Evolução da Pontuação Média', font: { size: 16 } } } } });
-    
-            const worstItemsCounter = evaluations.reduce((acc, { details }) => {
-                if (details) {
-                    if (details.organicos === '2') acc['Orgânicos Misturados']++;
-                    if (details.sanitarios === '2') acc['Papéis Sanitários']++;
-                    if (details.outros === '2') acc['Outros Não Recicláveis']++;
-                    if (details.nivel === '2') acc['Nível dos Coletores']++;
-                }
-                return acc;
-            }, { 'Orgânicos Misturados': 0, 'Papéis Sanitários': 0, 'Outros Não Recicláveis': 0, 'Nível dos Coletores': 0 });
-            const pieLabels = Object.keys(worstItemsCounter);
-            const pieData = Object.values(worstItemsCounter);
-            appState.chartInstances.worstItems = new Chart(document.getElementById('worstItemsChart'), { type: 'pie', data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: [chartColors.dangerOpacity, chartColors.warningOpacity, chartColors.secondaryOpacity, chartColors.primaryOpacity] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Itens com Pior Desempenho (Contagem de "Regular")', font: { size: 16 } } } } });
+            // --- Widget 4: Maiores Problemas (Gráfico de Pizza) ---
+            const worstItemsData = data.worst_items;
+            if (worstItemsCanvas && worstItemsData) {
+                const pieLabels = Object.keys(worstItemsData);
+                const pieData = Object.values(worstItemsData);
+                appState.chartInstances.worstItems = new Chart(worstItemsCanvas, { 
+                    type: 'pie', 
+                    data: { 
+                        labels: pieLabels, 
+                        datasets: [{ 
+                            data: pieData, 
+                            backgroundColor: [
+                                chartColors.dangerOpacity, 
+                                chartColors.warningOpacity, 
+                                chartColors.secondaryOpacity, 
+                                chartColors.primaryOpacity
+                            ] 
+                        }] 
+                    }, 
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            title: { display: false } 
+                        } 
+                    } 
+                });
+            }
+
         } catch (error) {
             console.error("Erro ao renderizar gráficos:", error);
             showNotification("Não foi possível carregar os dados do dashboard.", "error");
         }
     };
 
+    // ATUALIZADO: exportToXls (para incluir rastreio)
     const exportToXls = async () => {
         toggleButtonLoading(ui.exportBtn, true);
         try {
-            const { data: evaluations, error } = await supabaseClient.from('evaluations').select('*').order('score', { ascending: false });
+            const { data: evaluations, error } = await supabaseClient
+                .from('evaluations')
+                .select('*, sectors(name), profiles(email)') 
+                .is('deleted_at', null) 
+                .order('score', { ascending: false });
+                
             if (error) throw error;
             if (!evaluations || evaluations.length === 0) {
                 return showNotification("Não há dados para exportar.", 'warning');
             }
+            
             const dataForSheet = evaluations.map((ev, index) => ({
-                'Posição': index + 1, 'Setor/Sala': ev.sector, 'Responsável': ev.responsible || '', 'Pontuação': ev.score,
+                'Posição': index + 1, 
+                'Setor/Sala': ev.sectors ? ev.sectors.name : 'Setor Inválido', 
+                'Responsável': ev.responsible || '', 
+                'Pontuação': ev.score,
                 'Data da Avaliação': new Date(ev.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
-                'Avaliador': ev.evaluator, 'Observações': ev.observations || ''
+                'Avaliador (Digitado)': ev.evaluator, 
+                'Observações': ev.observations || '',
+                // CAMPOS DE RASTREIO (QUEM E QUANDO)
+                'Data de Cadastro': new Date(ev.created_at).toLocaleString('pt-BR', { timeZone: 'UTC' }),
+                'Cadastrado Por (Email)': ev.profiles ? ev.profiles.email : (ev.created_by || 'Desconhecido') 
             }));
+            
             const worksheet = XLSX.utils.json_to_sheet(dataForSheet);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Avaliações");
@@ -477,8 +707,7 @@
 
     const logoutDueToInactivity = () => {
         showNotification("Foi desconectado por inatividade.", "warning");
-        clearTimeout(appState.inactivityTimer);
-        supabaseClient.auth.signOut();
+        handleLogout(); // Chama a função de logout corrigida
     };
 
     const resetInactivityTimer = () => {
@@ -486,12 +715,14 @@
         appState.inactivityTimer = setTimeout(logoutDueToInactivity, INACTIVITY_TIMEOUT_MS);
     };
 
+    // ATUALIZADO: setupEventListeners
     const setupEventListeners = () => {
         document.body.addEventListener('click', (e) => {
             const target = e.target;
             if (target.matches('.close-button')) target.closest('.modal').classList.remove('active');
             if (target.matches('.modal')) target.classList.remove('active');
         });
+        
         ui.loginForm.addEventListener('submit', handleLogin);
         ui.logoutBtn.addEventListener('click', handleLogout);
         ui.forgotPasswordLink.addEventListener('click', (e) => {
@@ -501,34 +732,48 @@
             ui.forgotPasswordModal.classList.add('active');
         });
         ui.forgotPasswordForm.addEventListener('submit', handleForgotPassword);
+        
         ui.form.addEventListener('submit', handleFormSubmit);
         ui.form.addEventListener('change', calculateScore);
         ui.clearBtn.addEventListener('click', () => {
             showConfirmation('Limpar Formulário?', 'Todos os dados não guardados serão perdidos.', resetFormMode, 'Limpar', 'warning-btn');
         });
+        
+        ui.sectorSelect.addEventListener('change', handleSectorChange);
+
         ui.openRankingBtn.addEventListener('click', () => {
             ui.rankingFilter.value = '';
             displayResults(1);
             ui.rankingModal.classList.add('active');
         });
         ui.openDashboardBtn.addEventListener('click', () => {
-            renderCharts();
             ui.dashboardModal.classList.add('active');
+            // Renderiza os gráficos *depois* que o modal estiver visível
+            // para garantir que os <canvas> existam.
+            setTimeout(renderCharts, 10); 
         });
+        
         ui.rankingFilter.addEventListener('input', () => {
             clearTimeout(appState.searchDebounceTimer);
             appState.searchDebounceTimer = setTimeout(() => displayResults(1, ui.rankingFilter.value.trim()), 400);
         });
+        
         ui.resultsBody.addEventListener('click', (e) => {
             const button = e.target.closest('.action-icon-btn');
-            if (!button || appState.userRole !== 'admin') return;
-            const id = parseInt(button.dataset.id, 10);
+            if (!button) return;
+            const id = button.dataset.id; 
+            
+            if (appState.userRole !== 'admin') return; 
+
             if (button.classList.contains('delete')) handleDelete(id);
             if (button.classList.contains('edit')) handleEdit(id);
+            if (button.classList.contains('restore')) handleRestore(id); 
         });
+        
         ui.exportBtn.addEventListener('click', exportToXls);
         ui.prevPageBtn.addEventListener('click', () => { if (appState.currentPage > 1) displayResults(appState.currentPage - 1, ui.rankingFilter.value.trim()); });
         ui.nextPageBtn.addEventListener('click', () => { if (ui.nextPageBtn.disabled === false) displayResults(appState.currentPage + 1, ui.rankingFilter.value.trim()); });
+        
         ui.resetDbBtn.addEventListener('click', () => {
             showConfirmation("Limpar Base de Dados?", "ATENÇÃO: AÇÃO IRREVERSÍVEL! Todos os registos de avaliação serão apagados.", async () => {
                 ui.confirmModal.classList.remove('active'); 
@@ -546,15 +791,30 @@
         
         ui.confirmCancelBtn.addEventListener('click', () => ui.confirmModal.classList.remove('active'));
         
-        ui.confirmOkBtn.addEventListener('click', () => {
+        ui.confirmOkBtn.addEventListener('click', () => { 
             appState.currentConfirmCallback?.();
             ui.confirmModal.classList.remove('active');
         });
-        
+    
         ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'].forEach(event => window.addEventListener(event, resetInactivityTimer));
+    
+        const loginTogglePassword = document.querySelector('#login-form .toggle-password');
+        if (loginTogglePassword) {
+            loginTogglePassword.addEventListener('click', () => {
+                const targetId = loginTogglePassword.dataset.target;
+                const input = document.getElementById(targetId);
+                if (input && input.type === 'password') {
+                    input.type = 'text';
+                    loginTogglePassword.classList.replace('fa-eye', 'fa-eye-slash');
+                } else if (input) {
+                    input.type = 'password';
+                    loginTogglePassword.classList.replace('fa-eye-slash', 'fa-eye');
+                }
+            });
+        }
     };
 
-// --- LÓGICA DE TEMA (DARK/LIGHT MODE) ---
+    // --- LÓGICA DE TEMA (DARK/LIGHT MODE) ---
     const themeToggle = {
         btn: document.getElementById('theme-toggle-btn'),
         iconDark: document.querySelector('#theme-toggle-btn .icon-dark'),
