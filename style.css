@@ -1,31 +1,19 @@
-/* ===================================================================
-   KLIN - DESIGN SYSTEM & STYLESHEET V2.0
-   Tipografia: Inter (para UI moderna)
-   Paleta: Baseada na identidade visual da KLIN Engenharia
-   =================================================================== */
-
-/* --- 1. FONT IMPORT --- */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* --- 2. DESIGN SYSTEM VARIABLES (PALETA KLIN) --- */
 :root {
-    /* --- CORES DA MARCA (Extraídas do Logo) --- */
     --klin-primary-deep: #0C4C6C; 
     --klin-primary-vibrant: #007EAD;
     --klin-gradient: linear-gradient(135deg, var(--klin-primary-vibrant), var(--klin-primary-deep));
 
-    /* --- PALETA DE UI (Light Mode) --- */
     --bg-primary: #F0F4F8;       
     --bg-secondary: #FFFFFF;     
     --border-color: #DDE6ED;     
     --focus-ring-color: rgba(0, 126, 173, 0.25);
 
-    /* --- TEXTOS --- */
     --text-primary: #1A2530;     
     --text-secondary: #5A6E80;   
     --text-on-dark: #FFFFFF;     
 
-    /* --- CORES SEMÂNTICAS (Ação) --- */
     --success-color: #28a745;
     --warning-color: #ffc107;
     --danger-color: #dc3545;
@@ -36,12 +24,10 @@
     --info-gradient: linear-gradient(135deg, #17a2b8, #138496);
     --clear-gradient: linear-gradient(135deg, #6c757d, #5a6268);
 
-    /* --- SOMBRAS --- */
     --card-shadow: 0 4px 12px rgba(26, 37, 48, 0.08), 0 2px 6px rgba(26, 37, 48, 0.06);
     --focus-shadow: 0 0 0 4px var(--focus-ring-color);
 }
 
-/* --- DARK MODE - PALETA KLIN --- */
 [data-theme="dark"] {
     --bg-primary: #0A1926;       
     --bg-secondary: #122538;     
@@ -52,7 +38,6 @@
     --card-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
-/* --- 3. RESET & BASE STYLES --- */
 *, *::before, *::after {
     box-sizing: border-box;
 }
@@ -76,7 +61,6 @@ body {
     transition: background-color 0.3s, color 0.3s;
 }
 
-/* --- 4. LAYOUT CONTAINERS --- */
 #app-container {
     display: contents;
     width: 100%;
@@ -128,7 +112,6 @@ body {
     border-bottom: 3px solid var(--klin-primary-vibrant);
 }
 
-/* --- 5. MODALS & OVERLAYS --- */
 .auth-modal, .modal {
     position: fixed;
     top: 0; left: 0;
@@ -193,7 +176,6 @@ body {
     gap: 15px;
 }
 
-/* --- 6. FORMS & INPUTS --- */
 .form-content { padding: 35px; }
 
 .form-grid {
@@ -215,7 +197,7 @@ body {
     text-align: left;
 }
 
-.form-group input, textarea {
+.form-group input, textarea, select {
     padding: 12px 15px;
     border: 1px solid var(--border-color);
     background-color: var(--bg-secondary);
@@ -225,15 +207,34 @@ body {
     transition: border-color 0.3s, box-shadow 0.3s;
     font-family: 'Inter', sans-serif;
 }
+
 .form-group .fa-envelope, .form-group .fa-lock {
     position: absolute;
-    left: 15px; top: 42px;
+    left: 15px; bottom: 14px;
     color: #BDBDBD;
     transition: color 0.3s;
 }
 .form-group input:focus + i { color: var(--klin-primary-vibrant); }
 .form-group input#email, .form-group input#password { padding-left: 45px; }
+.form-group .toggle-password {
+    position: absolute;
+    right: 15px;
+    bottom: 14px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 10;
+    transition: color 0.3s;
+}
+.form-group .toggle-password:hover {
+    color: var(--klin-primary-vibrant);
+}
 
+.form-group input:focus + i { color: var(--klin-primary-vibrant); }
+.form-group input#email, .form-group input#password { padding-left: 45px; }
+
+.form-group input#password, .form-group input#new-password, .form-group input#confirm-password { 
+    padding-right: 45px; 
+}
 textarea {
     width: 100%;
     resize: vertical;
@@ -250,7 +251,8 @@ input[type="radio"] {
     outline: none;
     box-shadow: var(--focus-shadow);
 }
-.form-group input:focus, textarea:focus, #ranking-filter:focus {
+
+.form-group input:focus, textarea:focus, select:focus, #ranking-filter:focus {
     outline: none;
     border-color: var(--klin-primary-vibrant);
     box-shadow: var(--focus-shadow);
@@ -270,9 +272,8 @@ input[type="radio"] {
 }
 .score-display span { display: inline-block; transition: transform 0.3s; }
 
-/* --- 7. BUTTONS --- */
 .action-btn {
-    padding: 14px;
+    padding: 16px;
     border: none;
     color: var(--text-on-dark);
     font-size: 1.1em;
@@ -303,7 +304,7 @@ input[type="radio"] {
 .button-group, .main-actions {
     display: flex;
     gap: 15px;
-    margin-top: 15px;
+    margin-top: 25px;
 }
 .main-actions {
     width: 100%;
@@ -312,7 +313,6 @@ input[type="radio"] {
 }
 .action-btn { flex-grow: 1; }
 
-/* Button Color Assignments */
 #login-btn, .ranking-btn, .dashboard-btn { background: var(--klin-gradient); }
 .submit-btn { background: var(--success-gradient); }
 .update-btn { background: var(--warning-gradient); color: var(--text-primary); }
@@ -354,7 +354,6 @@ input[type="radio"] {
 .reset-db-btn:hover { color: #c82333; }
 
 
-/* --- 8. TABLES & RANKING --- */
 .table-wrapper {
     width: 100%;
     overflow-x: auto; 
@@ -410,6 +409,7 @@ input[type="radio"] {
 .action-icon-btn:hover { transform: scale(1.2); }
 .action-icon-btn.delete:hover { color: var(--danger-color); }
 .action-icon-btn.edit:hover { color: var(--klin-primary-vibrant); }
+.action-icon-btn.restore:hover { color: var(--success-color); }
 
 .filter-container { position: relative; margin-bottom: 25px; }
 .filter-container .fa-search {
@@ -421,17 +421,18 @@ input[type="radio"] {
 }
 
 .pagination-controls { display: flex; align-items: center; gap: 12px; }
+
 .pagination-controls button {
     background-color: var(--klin-primary-deep); color: white;
     border: none; border-radius: 8px; padding: 10px 15px;
     cursor: pointer; transition: background-color 0.3s;
 }
+
 .pagination-controls button:hover:not(:disabled) { background-color: var(--klin-primary-vibrant); }
 .pagination-controls button:disabled { background-color: #BDBDBD; cursor: not-allowed; }
 #current-page-display { font-weight: 600; color: var(--klin-primary-deep); }
 
 
-/* --- 9. DASHBOARD & MISC --- */
 .section-title {
     color: var(--text-primary);
     font-weight: 600;
@@ -441,16 +442,6 @@ input[type="radio"] {
     align-items: center;
     justify-content: center;
     gap: 12px;
-}
-
-.chart-container { 
-    margin-bottom: 20px; 
-    height: 350px; 
-    width: 100%;
-    background: var(--bg-secondary);
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
 }
 
 #notification-area {
@@ -480,7 +471,6 @@ input[type="radio"] {
 .notification.warning { background-color: var(--warning-color); color: var(--text-primary); }
 .notification.info { background-color: var(--info-color); }
 
-/* --- 10. RESPONSIVE ADJUSTMENTS --- */
 @media (max-width: 900px) {
     body { padding: 20px; }
     .modal-content { max-width: 95%; padding: 30px; }
@@ -501,3 +491,134 @@ input[type="radio"] {
     #logout-btn { padding: 8px 10px; font-size: 0.8em; top: 15px; right: 15px; }
     .close-button { top: 15px; right: 20px; }
 }
+
+.form-group select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235A6E80'%3E%3Cpath fill-rule='evenodd' d='M8 10.293l-4.146-4.147a.5.5 0 0 0-.708.708l4.5 4.5a.5.5 0 0 0 .708 0l4.5-4.5a.5.5 0 0 0-.708-.708L8 10.293z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 15px center;
+  background-size: 1em;
+  padding-right: 40px;
+}
+
+[data-theme="dark"] .form-group select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%2394A3B8'%3E%3Cpath fill-rule='evenodd' d='M8 10.293l-4.146-4.147a.5.5 0 0 0-.708.708l4.5 4.5a.5.5 0 0 0 .708 0l4.5-4.5a.5.5 0 0 0-.708-.708L8 10.293z'/%3E%3C/svg%3E");
+}
+
+.form-group select:invalid {
+  color: var(--text-secondary);
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.dashboard-widget {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: var(--card-shadow);
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-widget.full-width {
+    grid-column: 1 / -1;
+}
+
+.widget-title {
+    margin-top: 0;
+    margin-bottom: 20px;
+    text-align: center;
+    color: var(--text-primary);
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+.dashboard-grid .chart-container {
+    padding: 0;
+    border: none;
+    flex-grow: 1;
+    min-height: 300px;
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+}
+.kpi-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+}
+.kpi-value {
+    font-size: 2.5em;
+    font-weight: 700;
+    color: var(--klin-primary-vibrant);
+    line-height: 1.1;
+}
+.kpi-label {
+    font-size: 0.9em;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-top: 5px;
+}
+
+.medal-board {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+}
+.medal-column {
+    background: var(--bg-primary);
+    border-radius: 10px;
+    padding: 15px 20px;
+}
+.medal-column h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.1em;
+    font-weight: 600;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border-color);
+}
+.medal-column.gold h3 { border-color: #FFD700; }
+.medal-column.silver h3 { border-color: #C0C0C0; }
+.medal-column.bronze h3 { border-color: #CD7F32; }
+
+.medal-column ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 0.95em;
+}
+.medal-column ul li {
+    margin-bottom: 5px;
+}
+
+@media (max-width: 800px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    .kpi-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .medal-board {
+        grid-template-columns: 1fr;
+    }
+}
+

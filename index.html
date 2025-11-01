@@ -152,11 +152,33 @@
             <div class="modal-content">
                 <button class="close-button" id="close-dashboard-btn" aria-label="Fechar">&times;</button>
                 <h2 id="dashboard-title" class="section-title"><i class="fa-solid fa-chart-pie"></i>Dashboard de Desempenho</h2>
-                <div class="dashboard-grid">
-                    <div class="chart-container"><canvas id="scoreBySectorChart"></canvas></div>
-                    <div class="chart-container"><canvas id="scoreOverTimeChart"></canvas></div>
-                    <div class="chart-container"><canvas id="worstItemsChart"></canvas></div>
+                            <div class="dashboard-grid">
+                
+                <div id="kpi-widget-container" class="dashboard-widget kpi-grid">
+                    <div class="kpi-card"><span class="kpi-value">...</span><span class="kpi-label">Carregando...</span></div>
                 </div>
+
+                <div id="medal-board-container" class="dashboard-widget medal-board">
+                    <div class="medal-column gold"><h3>🥇 Salas Ouro</h3><ul><li>...</li></ul></div>
+                    <div class="medal-column silver"><h3>🥈 Salas Prata</h3><ul><li>...</li></ul></div>
+                    <div class="medal-column bronze"><h3>🥉 Salas Bronze</h3><ul><li>...</li></ul></div>
+                </div>
+
+                <div class="dashboard-widget">
+                    <h3 class="widget-title">As 5 Salas com Pior Pontuação Média</h3>
+                    <div class="chart-container">
+                        <canvas id="rankingChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="dashboard-widget">
+                    <h3 class="widget-title">Maiores Problemas (Contagem de "Regular")</h3>
+                    <div class="chart-container">
+                        <canvas id="worstItemsChart"></canvas>
+                    </div>
+                </div>
+
+            </div>
             </div>
         </div>
 
