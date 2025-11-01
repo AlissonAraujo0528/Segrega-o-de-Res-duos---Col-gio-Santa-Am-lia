@@ -1,0 +1,20 @@
+{
+  "name": "KLIN - Segregação de Resíduos",
+  "short_name": "KLIN",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#F0F4F8",
+  "theme_color": "#0C4C6C",
+  "icons": [
+    {
+      "src": "KLIN.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "KLIN.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

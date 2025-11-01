@@ -136,7 +136,7 @@
         }
     };
 
-    // CORREÇÃO 3: Logout forçado com reload
+    // CORREÇÃO: Logout forçado com reload
     const handleLogout = async () => {
         showConfirmation('Sair do Sistema', 'Deseja realmente sair?', async () => {
             ui.confirmModal.classList.remove('active');
@@ -204,7 +204,7 @@
             appState.currentUserId = null; 
             clearTimeout(appState.inactivityTimer);
             toggleButtonLoading(ui.loginBtn, false);
-            // CORREÇÃO 3 (Defesa): Recarrega a página se o estado mudar para SIGNED_OUT
+            // CORREÇÃO (Defesa): Recarrega a página se o estado mudar para SIGNED_OUT
             if (!ui.appContainer.classList.contains('hidden')) {
                 window.location.reload();
             }
@@ -509,7 +509,7 @@
         }
     };
     
-    // CORREÇÃO 2: Nova função de renderização do Dashboard
+    // CORREÇÃO: Nova função de renderização do Dashboard
     const renderCharts = async () => {
         // Limpa gráficos antigos
         Object.values(appState.chartInstances).forEach(chart => chart?.destroy());
@@ -522,16 +522,22 @@
         const rankingCanvas = document.getElementById('rankingChart');
         const worstItemsCanvas = document.getElementById('worstItemsChart');
 
-        // Se os elementos não existirem (modal fechado), não faz nada
+        // Se os elementos não existirem (modal fechado ou HTML antigo), não faz nada
         if (!rankingCanvas || !worstItemsCanvas) {
-            console.log("Dashboard modal não está pronto, pulando renderização.");
+            console.error("Elementos <canvas> do dashboard ('rankingChart' ou 'worstItemsChart') não encontrados. Verifique seu index.html.");
+            showNotification("Falha ao carregar o dashboard. Layout inválido.", "error");
             return; 
         }
 
         try {
+            // Chama a função SQL V3
             const { data, error } = await supabaseClient.rpc('get_dashboard_data_v3');
             
-            if (error) throw error;
+            if (error) {
+                // O erro 404 (Not Found) da sua imagem [cite: image_eba7e8.png] será pego aqui
+                console.error("Erro ao chamar RPC 'get_dashboard_data_v3':", error);
+                throw new Error(error.message || "Função RPC 'get_dashboard_data_v3' não encontrada.");
+            }
             if (!data) {
                  showNotification("Não há dados suficientes para gerar gráficos.", "info");
                  // Limpa os "Carregando..."
@@ -578,7 +584,7 @@
             // --- Widget 2: Pódio (Quadro de Medalhas) ---
             const medalData = data.medal_lists;
             if (ui.medalBoardContainer && medalData) {
-                const createList = (list) => list.length ? list.map(item => `<li>${sanitizeHTML(item)}</li>`).join('') : '<li>Nenhuma</li>';
+                const createList = (list) => (list && list.length) ? list.map(item => `<li>${sanitizeHTML(item)}</li>`).join('') : '<li>Nenhuma</li>';
                 
                 ui.medalBoardContainer.innerHTML = `
                     <div class="medal-column gold">
@@ -850,3 +856,4 @@
     setupEventListeners();
     themeToggle.init();
 })();
+
