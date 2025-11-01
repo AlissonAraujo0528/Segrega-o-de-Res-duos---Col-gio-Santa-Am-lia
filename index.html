@@ -7,7 +7,8 @@
     
     <link rel="icon" type="image/png" href="KLIN.png">
     <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json"> <!-- Para o PWA -->
+    <!-- CORREÇÃO: Adiciona o link para o manifest.json -->
+    <link rel="manifest" href="manifest.json">
     
     <!-- Dependências Externas -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +18,7 @@
     
     <!-- Scripts dos Gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
-    <!-- Plugin para a linha de "Meta" (KPI) -->
+    <!-- CORREÇÃO: Adiciona o plugin de anotação (para a linha de KPI) -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0/dist/chartjs-plugin-annotation.min.js" defer></script> 
     
     <!-- Scripts do Backend -->
@@ -38,11 +39,11 @@
                     <input type="email" id="email" autocomplete="email" required>
                     <i class="fas fa-envelope"></i> 
                 </div>
+                <!-- CORREÇÃO 1: "Olho" movido para DENTRO do form-group -->
                 <div class="form-group">
                     <label for="password">Senha:</label>
                     <input type="password" id="password" autocomplete="current-password" required>
                     <i class="fas fa-lock"></i> 
-                    <!-- CORREÇÃO 1: "Olho" movido para DENTRO do form-group -->
                     <i class="fa-solid fa-eye toggle-password" data-target="password"></i>
                 </div>
                 <button type="submit" id="login-btn" class="action-btn">
@@ -101,7 +102,7 @@
                     <div class="form-grid">
                         <div class="form-group"><label for="evaluator">Avaliador:</label><input type="text" id="evaluator" required></div>
                         <div class="form-group"><label for="evaluation-date">Data da Avaliação:</label><input type="date" id="evaluation-date" required></div>
-                        <!-- CORREÇÃO: Trocado <input> por <select> -->
+                        <!-- CORREÇÃO: Trocado <input> por <select> para funcionar com o script.js -->
                         <div class="form-group">
                             <label for="sector">Setor/Sala:</label>
                             <select id="sector" required>
@@ -171,7 +172,7 @@
                 <button class="close-button" id="close-dashboard-btn" aria-label="Fechar">&times;</button>
                 <h2 id="dashboard-title" class="section-title"><i class="fa-solid fa-chart-pie"></i>Dashboard de Desempenho</h2>
                 
-                <!-- NOVO LAYOUT DE WIDGETS -->
+                <!-- NOVO LAYOUT DE WIDGETS (Corresponde ao script.js) -->
                 <div class="dashboard-grid">
                     
                     <!-- Widget 1: KPIs -->
@@ -197,7 +198,7 @@
                     </div>
     
                     <!-- Widget 4: Maiores Problemas -->
-                    <div class="dashboard-widget">
+                    <div class_ ="dashboard-widget">
                         <h3 class="widget-title">Maiores Problemas (Contagem de "Regular")</h3>
                         <div class="chart-container">
                             <canvas id="worstItemsChart"></canvas>
@@ -229,7 +230,7 @@
     <!-- Script principal da aplicação -->
     <script src="script.js" defer></script>
     
-    <!-- Script para registrar o Service Worker (PWA) -->
+    <!-- CORREÇÃO: Script para registrar o Service Worker (PWA) -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -245,3 +246,4 @@
     </script>
 </body>
 </html>
+
