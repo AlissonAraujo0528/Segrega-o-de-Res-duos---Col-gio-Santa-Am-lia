@@ -676,7 +676,7 @@
         try {
             const { data: evaluations, error } = await supabaseClient
                 .from('evaluations')
-                .select('responsible, score, date, evaluator, observations, created_at, created_by, sectors(name), profiles(email)') 
+                .select('responsible, score, date, evaluator, observations, created_at, created_by, sectors(name)')
                 .is('deleted_at', null) 
                 .order('score', { ascending: false });
                 
