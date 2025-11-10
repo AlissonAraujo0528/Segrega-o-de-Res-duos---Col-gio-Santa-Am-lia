@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* * ✅ CORREÇÃO:
+ * REMOVEMOS as linhas @custom-variant (ou @variant) daqui.
+ * Elas já estão sendo definidas corretamente no seu
+ * arquivo 'tailwind.config.ts' através de 'plugins'.
+ * Tê-las aqui estava quebrando o processador do Tailwind.
+ */
+
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+
+/* ✅ Tema (Isto está correto) */
+@theme {
+  /* ... (Todas as suas definições de variáveis --color-... permanecem) ... */
+  --color-klin-deep: #0C4C6C;
+  --color-klin-vibrant: #007EAD;
+  --color-primary: #007EAD;
+  --color-primary-dark: #0C4C6C;
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+  --color-warning: #eab308;
+  --color-bg-primary: #f3f4f6;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #f9fafb;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-border-light: #e2e8f0;
+  --color-bg-primary-dark: #0f172a;
+  --color-bg-secondary-dark: #1e293b;
+  --color-bg-tertiary-dark: #334155;
+  --color-text-primary-dark: #f8fafc;
+  --color-text-secondary-dark: #94a3b8;
+  --color-border-dark: #334155;
+}
+
+/* ✅ Mapeamento Dark Mode (Isto está correto) */
+.dark {
+  --color-primary: var(--color-klin-vibrant);
+  --color-primary-dark: var(--color-klin-deep);
+  --color-bg-primary: var(--color-bg-primary-dark);
+  --color-bg-secondary: var(--color-bg-secondary-dark);
+  --color-bg-tertiary: var(--color-bg-tertiary-dark);
+  --color-text-primary: var(--color-text-primary-dark);
+  --color-text-secondary: var(--color-text-secondary-dark);
+  --color-border-light: var(--color-border-dark);
+}
+
+/* ✅ COMPONENTES (Isto está correto) */
+@layer components {
+  .modal-fade-enter {
+    @starting-style { opacity: 0; transform: scale(0.95); }
+    opacity: 1;
+    transform: scale(1);
+    transition: all 0.2s ease-out;
+  }
+  .modal-fade-leave {
+    opacity: 0;
+    transform: scale(0.95);
+    transition: all 0.15s ease-in;
+  }
+}
+
+/* ✅ Transição global (Isto está correto) */
+* {
+  transition:
+    background-color .2s ease,
+    color .2s ease,
+    border-color .2s ease;
+}
