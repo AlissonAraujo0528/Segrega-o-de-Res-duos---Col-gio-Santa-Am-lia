@@ -1,0 +1,28 @@
+# 🔑 SEGREDO CRÍTICO: CHAVES DE AMBIENTE
+# CONTÉM O SUPABASE KEY E URL (NUNCA ENVIAR!)
+.env
+.env.*
+
+# 📦 DEPENDÊNCIAS DE PROJETO
+# Evita o envio de milhares de arquivos da pasta node_modules
+/node_modules
+/package-lock.json
+
+# 🛠️ PASTA DE BUILD (Arquivos de Produção)
+# Gerado pelo comando "vite build"
+/dist
+
+# ⚙️ ARQUIVOS TEMPORÁRIOS E DE LOG
+# Logs de erros do NPM/Yarn
+npm-debug.log*
+yarn-error.log
+pnpm-debug.log*
+.tmp/
+
+# Arquivos de metadados de build do TypeScript
+# Referenciado em tsconfig.app.json: "./node_modules/.tmp/tsconfig.app.tsbuildinfo"
+*.tsbuildinfo
+
+# IDEs
+.vscode/
+.idea/
