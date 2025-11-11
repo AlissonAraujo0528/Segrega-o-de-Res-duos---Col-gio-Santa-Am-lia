@@ -60,7 +60,8 @@ function handleDelete(id: string) {
   })
 }
 
-
+// --- FUNÇÃO CORRIGIDA ---
+// Altere esta função para chamar a store
 function handleExport() {
   // Remove o toast de "não implementado" e chama a função real
   rankingStore.exportAllResults()
