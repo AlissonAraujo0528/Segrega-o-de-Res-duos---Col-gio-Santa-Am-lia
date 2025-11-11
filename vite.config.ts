@@ -2,7 +2,9 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
-  base: '/segrega-o-de-res-duos---col-gio-santa-am-lia/',
+
+  base: '/Segrega-o-de-Res-duos---Col-gio-Santa-Am-lia/',
+  
   plugins: [
     vue(),
   ],
