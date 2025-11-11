@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
-// import { useAuthStore } from './authStore' // <-- *** CORREÇÃO: REMOVIDO DAQUI ***
+import { exportToExcel } from '../lib/exportToExcel'
+import { useUiStore } from './uiStore'
+import { useEvaluationStore } from './evaluationStore'
 
 // Tipos de dados
 export interface EvaluationResult {
@@ -11,6 +13,18 @@ export interface EvaluationResult {
   evaluator: string
   sectors: { name: string } | null
   deleted_at?: string | null
+}
+
+// Tipo para a consulta completa de exportação
+interface EvaluationExport {
+  id: string
+  score: number
+  date: string
+  evaluator: string
+  sectors: { name: string } | null
+  responsible: string
+  observations: string
+  details: { [key: string]: string | number } | null
 }
 
 export const useRankingStore = defineStore('ranking', () => {
@@ -38,7 +52,7 @@ export const useRankingStore = defineStore('ranking', () => {
       let count: number | null = null
 
       if (!filter) {
-        // --- LÓGICA ANTIGA (Sem filtro) ---
+        // --- LÓGICA (Sem filtro) ---
         const { data: queryData, error: queryError, count: queryCount } = await supabaseClient
           .from('evaluations')
           .select('id, score, date, evaluator, deleted_at, sectors(*)', { count: 'exact' })
@@ -51,7 +65,7 @@ export const useRankingStore = defineStore('ranking', () => {
         count = queryCount
 
       } else {
-        // --- LÓGICA NOVA (Com filtro) ---
+        // --- LÓGICA (Com filtro) ---
         const { data: rpcData, error: rpcError } = await supabaseClient
           .rpc('search_evaluations', {
             search_term: filter,
@@ -79,26 +93,110 @@ export const useRankingStore = defineStore('ranking', () => {
     }
   }
 
-  /**
-   * Restaura um item da lixeira.
-   */
+
   async function restoreEvaluation(id: string) {
-    // *** CORREÇÃO: Import dinâmico ***
+    const uiStore = useUiStore()
     const { useAuthStore } = await import('./authStore')
     const authStore = useAuthStore()
-    if (authStore.userRole !== 'admin') throw new Error('Apenas administradores podem restaurar.')
-    console.log("Restaurando...", id)
+
+    if (authStore.userRole !== 'admin') {
+      uiStore.showToast('Apenas administradores podem restaurar.', 'error')
+      return
+    }
+
+    try {
+      const { error } = await supabaseClient
+        .from('evaluations')
+        .update({ deleted_at: null })
+        .eq('id', id)
+
+      if (error) throw error
+      
+      uiStore.showToast('Registro restaurado com sucesso!', 'success')
+      // Atualiza a lista (o item sumirá da lixeira)
+      await fetchResults(currentPage.value, filterText.value)
+
+    } catch (error: any) {
+      console.error("Erro ao restaurar:", error)
+      uiStore.showToast(error.message || 'Falha ao restaurar o registro.', 'error')
+    }
   }
 
-  /**
-   * Carrega uma avaliação específica para edição.
-   */
   async function fetchEvaluationForEdit(id: string) {
-    // *** CORREÇÃO: Import dinâmico ***
+    const uiStore = useUiStore()
+    const evaluationStore = useEvaluationStore()
     const { useAuthStore } = await import('./authStore')
     const authStore = useAuthStore()
-    if (authStore.userRole !== 'admin') throw new Error('Apenas administradores podem editar.')
-    console.log("Editando...", id)
+
+    if (authStore.userRole !== 'admin') {
+      uiStore.showToast('Apenas administradores podem editar.', 'error')
+      return
+    }
+
+    try {
+      // 1. Delega a busca dos dados para a evaluationStore
+      await evaluationStore.fetchEvaluationForEdit(id)
+
+      // 2. Se a busca foi bem-sucedida...
+      if (evaluationStore.dataToEdit) {
+        // 3. Fecha o modal de ranking para o usuário ver o formulário
+        uiStore.closeModal()
+      } else {
+        // Se não encontrou dados, mostra um erro
+        throw new Error("Não foi possível carregar a avaliação para edição.")
+      }
+    } catch (error: any) {
+      console.error("Erro ao buscar para editar:", error)
+      uiStore.showToast(error.message, 'error')
+    }
+  }
+
+  async function fetchAllResultsForExport(): Promise<EvaluationExport[]> {
+    const { data: rpcData, error: rpcError } = await supabaseClient
+      .rpc('search_evaluations', {
+        search_term: '',
+        page_limit: 10000,
+        page_offset: 0
+      })
+
+    if (rpcError) throw rpcError
+    if (!rpcData?.data) return []
+    
+    return rpcData.data as EvaluationExport[]
+  }
+
+  async function exportAllResults() {
+    const uiStore = useUiStore()
+    isLoading.value = true
+    try {
+      const data = await fetchAllResultsForExport()
+      if (!data || data.length === 0) {
+        throw new Error("Não há dados para exportar.")
+      }
+
+      const formattedData = data.map(item => ({
+        'Data': new Date(item.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
+        'Setor': item.sectors?.name || 'N/A',
+        'Pontuação': item.score,
+        'Avaliador': item.evaluator,
+        'Responsável': item.responsible,
+        'Orgânicos': item.details?.organicos,
+        'Sanitários': item.details?.sanitarios,
+        'Outros': item.details?.outros,
+        'Nível': item.details?.nivel,
+        'Observações': item.observations,
+        'ID': item.id,
+      }))
+
+      const timestamp = new Date().toISOString().split('T')[0]
+      exportToExcel(formattedData, `Export_Klin_Avaliacoes_${timestamp}`)
+      uiStore.showToast('Exportação iniciada!', 'success')
+
+    } catch (error: any) {
+      uiStore.showToast(error.message, 'error')
+    } finally {
+      isLoading.value = false
+    }
   }
 
   return {
@@ -110,5 +208,6 @@ export const useRankingStore = defineStore('ranking', () => {
     fetchResults,
     restoreEvaluation,
     fetchEvaluationForEdit,
+    exportAllResults,
   }
 })

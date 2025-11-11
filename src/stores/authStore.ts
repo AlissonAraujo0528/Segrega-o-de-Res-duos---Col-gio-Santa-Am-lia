@@ -2,8 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
-// import { useUiStore } from './uiStore' // <-- *** CORREÇÃO: REMOVIDO DAQUI ***
-
+// import { useUiStore } from './uiStore'
 // 2. CONSTANTE DE INATIVIDADE (vinda do script.js)
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutos
 
@@ -22,13 +21,11 @@ export const useAuthStore = defineStore('auth', () => {
    * Desloga o usuário e mostra um aviso.
    * Chamado pelo setTimeout.
    */
-  // *** CORREÇÃO: Função agora é 'async' ***
   async function logoutDueToInactivity() {
-    // *** CORREÇÃO: Import dinâmico ***
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore() 
     uiStore.showToast('Você foi desconectado por inatividade.', 'info')
-    handleLogout() // Chama a função de logout normal
+    handleLogout()
   }
 
   /**
@@ -99,12 +96,15 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function handleLogout() {
-    stopInactivityTimer() // 5. PARA O TIMER NO LOGOUT
-    await supabaseClient.auth.signOut()
-    userRole.value = null
-    currentUserId.value = null
-    isAuthReady.value = false
-  }
+    stopInactivityTimer() // 1. Para o timer
+    const { error } = await supabaseClient.auth.signOut() // 2. Desloga
+    if (error) {
+      // Se o logout falhar (raro), pelo menos resetamos o timer
+      console.error('Erro no logout:', error.message)
+      resetInactivityTimer()
+    }
+    
+  }
 
   async function handleLogin(email: string, password: string) {
     isAuthReady.value = false
