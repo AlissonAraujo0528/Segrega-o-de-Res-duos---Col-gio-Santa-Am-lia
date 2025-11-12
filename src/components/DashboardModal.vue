@@ -199,8 +199,9 @@ const worstItemsChartData = computed(() => {
                  bg-[url(&quot;data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e&quot;)]"
         >
           <option
-            v...if="dashboardStore.availablePeriods.length === 0"
+            v-if="dashboardStore.availablePeriods.length === 0"
             value=""
+            disabled
           >
             Carregando...
           </option>
@@ -212,7 +213,7 @@ const worstItemsChartData = computed(() => {
             {{ period.label }}
           </option>
         </select>
-      </div>
+        </div>
     </div>
 
     <div class="flex-1 overflow-auto bg-bg-primary p-6">
