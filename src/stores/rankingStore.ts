@@ -179,7 +179,7 @@ export const useRankingStore = defineStore('ranking', () => {
         'Setor': item.sectors?.name || 'N/A',
         'Pontuação': item.score,
         'Avaliador': item.evaluator,
-        'Responsável': item.responsible,
+        'Responsável': item.responsible ?? '',
         'Observações': item.observations,
         'ID': item.id,
       }))
