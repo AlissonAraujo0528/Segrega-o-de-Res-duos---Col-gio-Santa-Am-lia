@@ -180,10 +180,6 @@ export const useRankingStore = defineStore('ranking', () => {
         'Pontuação': item.score,
         'Avaliador': item.evaluator,
         'Responsável': item.responsible,
-        'Orgânicos': item.details?.organicos,
-        'Sanitários': item.details?.sanitarios,
-        'Outros': item.details?.outros,
-        'Nível': item.details?.nivel,
         'Observações': item.observations,
         'ID': item.id,
       }))
