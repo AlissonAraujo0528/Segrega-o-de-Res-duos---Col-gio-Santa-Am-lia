@@ -4,15 +4,13 @@ import { supabaseClient } from '../lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
 
 // --- TRAVA DE SEGURANÇA (BOOT LOCK) ---
-// Impede redirecionamentos automáticos indesejados ao carregar a página
 const IS_RECOVERY_BOOT = window.location.hash && window.location.hash.includes('type=recovery');
 
 if (IS_RECOVERY_BOOT) {
-  console.warn("🚨 MODO RECUPERAÇÃO DETECTADO NO BOOT.");
+  console.warn("[AuthDebug] 🚨 MODO RECUPERAÇÃO DETECTADO NO BOOT.");
 }
 
-// 1. CONSTANTE DE INATIVIDADE
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutos
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 
 
 export const useAuthStore = defineStore('auth', () => {
   // --- STATE ---
@@ -21,11 +19,10 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthReady = ref(false)
   const inactivityTimer = ref<number | undefined>(undefined)
   
-  // Flag para impedir que o Listener atrapalhe o Login Manual
+  // Flag para controle manual
   let isManualLogin = false; 
 
   // --- FUNÇÕES DE INATIVIDADE ---
-  
   async function logoutDueToInactivity() {
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore() 
@@ -56,14 +53,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   // --- ACTIONS ---
 
-  // Função central de validação
   async function checkUserProfileAndInitialize(user: User) {
+    console.log("[AuthDebug] 🔍 checkUserProfileAndInitialize iniciado para:", user.email);
+    
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore()
 
-    // 1. Se for BOOT de recuperação, trava tudo
+    // 1. Boot Lock Check
     if (IS_RECOVERY_BOOT) {
-       console.log("🔒 Boot de Recuperação: Forçando modal de senha.");
+       console.log("[AuthDebug] 🔒 Boot de Recuperação: Travando tudo.");
        uiStore.authModalMode = 'update_password';
        uiStore.isRecoveryMode = true; 
        currentUserId.value = user.id;
@@ -72,51 +70,62 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      console.log("🔍 Verificando perfil do usuário...");
-      
+      // 2. Perfil Check
+      console.log("[AuthDebug] Buscando perfil na tabela 'profiles'...");
       const { data: profile, error: profileError } = await supabaseClient
         .from('profiles')
         .select('must_change_password')
         .eq('id', user.id)
         .single()
 
-      if (profileError) throw profileError
+      if (profileError) {
+        console.error("[AuthDebug] ❌ Erro ao buscar perfil:", profileError);
+        throw profileError;
+      }
+      
+      console.log("[AuthDebug] Perfil encontrado. must_change_password:", profile.must_change_password);
 
-      // 2. Se precisar trocar senha (primeiro acesso)
       if (profile.must_change_password) {
-        console.warn("⚠️ Usuário precisa trocar a senha.");
-        
+        console.warn("[AuthDebug] ⚠️ Usuário precisa trocar senha. Bloqueando acesso.");
         uiStore.authModalMode = 'update_password';
         uiStore.isRecoveryMode = true;
-
-        // Mantemos userRole null -> Dashboard fechada -> Modal Aberto
         currentUserId.value = user.id;
-        
+        // userRole permanece null
       } else {
         // 3. Login Normal
-        console.log("✅ Perfil OK. Liberando acesso.");
+        console.log("[AuthDebug] ✅ Perfil OK. Buscando Role (RPC get_my_role)...");
         
         const { data: role, error: roleError } = await supabaseClient.rpc('get_my_role')
-        if (roleError) throw roleError
         
+        if (roleError) {
+             console.error("[AuthDebug] ❌ Erro no RPC get_my_role:", roleError);
+             throw roleError;
+        }
+
+        console.log("[AuthDebug] Role recebida:", role);
+        
+        // Destrava UI
         uiStore.isRecoveryMode = false;
         uiStore.authModalMode = 'login';
         
-        userRole.value = role; // <--- LIBERA DASHBOARD
+        // Libera Dashboard
+        userRole.value = role; 
         currentUserId.value = user.id;
         
         startInactivityTimer();
+        console.log("[AuthDebug] 🚀 Acesso LIBERADO!");
       }
     } catch (error) {
-      console.error("❌ Erro na verificação de perfil:", error);
+      console.error("[AuthDebug] 💥 Erro fatal em checkUserProfile:", error);
       await handleLogout(); 
-      throw error; // Repassa erro para o UI mostrar msg vermelha
+      throw error; 
     } finally {
       isAuthReady.value = true;
     }
   }
 
   async function handleLogout() {
+    console.log("[AuthDebug] Fazendo Logout...");
     stopInactivityTimer()
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore()
@@ -124,35 +133,52 @@ export const useAuthStore = defineStore('auth', () => {
     uiStore.isRecoveryMode = false
     uiStore.authModalMode = 'login'
 
+    // Limpa storage local para evitar "sujeira"
+    localStorage.removeItem('sb-' + import.meta.env.VITE_SUPABASE_URL + '-auth-token') // Tentativa genérica de limpeza
+
     await supabaseClient.auth.signOut()
     
     userRole.value = null
     currentUserId.value = null
+    console.log("[AuthDebug] Logout concluído.");
   }
 
-  // --- LOGIN MANUAL BLINDADO ---
+  // --- LOGIN MANUAL ---
   async function handleLogin(email: string, password: string) {
+    console.log("[AuthDebug] Botão 'Entrar' clicado via handleLogin.");
     isAuthReady.value = false;
-    isManualLogin = true; // 1. Ativa a flag de controle manual
+    isManualLogin = true; 
     
     try {
+        console.log("[AuthDebug] Chamando supabase.auth.signInWithPassword...");
         const { data, error } = await supabaseClient.auth.signInWithPassword({
             email,
             password,
         });
 
-        if (error) throw error;
+        if (error) {
+            console.error("[AuthDebug] ❌ Erro no Supabase Login:", error.message);
+            throw error;
+        }
 
-        // 2. Chama a verificação diretamente e aguarda
+        console.log("[AuthDebug] Supabase Login OK. User:", data.user?.id);
+
         if (data.user) {
+            console.log("[AuthDebug] Iniciando verificação de perfil...");
             await checkUserProfileAndInitialize(data.user);
+        } else {
+            console.warn("[AuthDebug] Login sem dados de usuário?");
         }
     } catch (error) {
-        throw error; // Joga o erro para o Modal exibir
+        console.error("[AuthDebug] Erro capturado no handleLogin:", error);
+        throw error; 
     } finally {
-        // 3. Libera a flag após terminar tudo (com sucesso ou erro)
-        // O timeout garante que o Listener não pegue o evento residual imediatamente
-        setTimeout(() => { isManualLogin = false }, 500);
+        console.log("[AuthDebug] Finalizando handleLogin (finally block).");
+        // Pequeno delay para garantir que o listener não sobrescreva
+        setTimeout(() => { 
+            isManualLogin = false; 
+            console.log("[AuthDebug] isManualLogin = false");
+        }, 500);
         isAuthReady.value = true;
     }
   }
@@ -163,23 +189,25 @@ export const useAuthStore = defineStore('auth', () => {
       .replace(/\/+$/, '');
       
     const redirectTo = baseUrl; 
-    console.log("Reset link pointing to:", redirectTo);
+    console.log("[AuthDebug] Enviando reset para:", redirectTo);
     
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) throw error;
   }
 
-  // --- LISTENER (OUVINTE AUTOMÁTICO) ---
+  // --- LISTENER ---
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    // SE ESTIVERMOS NO MEIO DE UM LOGIN MANUAL, O OUVINTE NÃO FAZ NADA.
-    if (isManualLogin) return; 
+    console.log(`[AuthDebug] 👂 Evento Listener: ${event} | ManualLogin: ${isManualLogin}`);
 
-    // Se for BOOT de recuperação, também ignora
+    if (isManualLogin) {
+        console.log("[AuthDebug] ✋ Ignorando evento pois isManualLogin é true.");
+        return; 
+    }
+
     if (IS_RECOVERY_BOOT) return;
 
-    // Lógica normal para reconexão automática (F5)
     if (event === 'SIGNED_IN' && session?.user && !userRole.value) {
-       console.log("⚡ Auto-login detectado (Refresh/Sessão)");
+       console.log("[AuthDebug] ⚡ Auto-login detectado pelo listener.");
        await checkUserProfileAndInitialize(session.user).catch(err => console.error(err));
     } 
     else if (event === 'SIGNED_OUT') {
