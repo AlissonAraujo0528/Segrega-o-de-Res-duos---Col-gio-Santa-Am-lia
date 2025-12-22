@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
-// import { useUiStore } from './uiStore'
-// 2. CONSTANTE DE INATIVIDADE (vinda do script.js)
+
+// 1. CONSTANTE DE INATIVIDADE
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutos
 
 export const useAuthStore = defineStore('auth', () => {
@@ -12,48 +12,32 @@ export const useAuthStore = defineStore('auth', () => {
   const currentUserId = ref<string | null>(null)
   const isAuthReady = ref(false)
   
-  // 3. STATE PARA O TIMER E A UISTORE
+  // 2. STATE PARA O TIMER
   const inactivityTimer = ref<number | undefined>(undefined)
 
-  // --- FUNÇÕES DE INATIVIDADE (NOVAS) ---
+  // --- FUNÇÕES DE INATIVIDADE ---
   
-  /**
-   * Desloga o usuário e mostra um aviso.
-   * Chamado pelo setTimeout.
-   */
   async function logoutDueToInactivity() {
+    // Importação dinâmica para evitar Dependência Circular
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore() 
     uiStore.showToast('Você foi desconectado por inatividade.', 'info')
     handleLogout()
   }
 
-  /**
-   * Limpa o timer antigo e inicia um novo.
-   * Chamado por qualquer atividade do usuário.
-   */
   function resetInactivityTimer() {
     clearTimeout(inactivityTimer.value)
     inactivityTimer.value = setTimeout(logoutDueToInactivity, INACTIVITY_TIMEOUT_MS) as unknown as number
   }
 
-  /**
-   * Começa a ouvir por atividade do usuário.
-   * Chamado no login.
-   */
   function startInactivityTimer() {
-    // Lista de eventos que contam como "atividade"
     const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart']
     activityEvents.forEach(event => {
       document.addEventListener(event, resetInactivityTimer)
     })
-    resetInactivityTimer() // Inicia o timer pela primeira vez
+    resetInactivityTimer()
   }
 
-  /**
-   * Para de ouvir por atividade e limpa o timer.
-   * Chamado no logout.
-   */
   function stopInactivityTimer() {
     clearTimeout(inactivityTimer.value)
     const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart']
@@ -62,9 +46,13 @@ export const useAuthStore = defineStore('auth', () => {
     })
   }
 
-  // --- ACTIONS (Atualizadas) ---
+  // --- ACTIONS ---
 
   async function checkUserProfileAndInitialize(user: User) {
+    // Importação dinâmica aqui dentro para garantir que o Pinia já subiu
+    const { useUiStore } = await import('./uiStore')
+    const uiStore = useUiStore()
+
     try {
       const { data: role, error: roleError } = await supabaseClient.rpc('get_my_role')
       if (roleError) throw roleError
@@ -78,33 +66,58 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (profileError) throw profileError
 
+      // --- TRATAMENTO DE TROCA DE SENHA ---
       if (profile.must_change_password) {
-        console.warn("Usuário precisa trocar a senha!");
-        await handleLogout(); // Força o logout
-      } else {
-        // Sucesso!
+        console.warn("Usuário precisa trocar a senha - Ativando modo de recuperação");
+        
+        // 1. Mantemos logado para permitir a troca
         userRole.value = role
         currentUserId.value = user.id
-        startInactivityTimer() // 4. INICIA O TIMER NO LOGIN
+
+        // 2. Acionamos a UI
+        uiStore.authModalMode = 'update_password' 
+        uiStore.isRecoveryMode = true // Isso impede o App.vue de esconder o modal
+        
+        // NÃO iniciamos o timer de inatividade aqui para não deslogar o usuário no meio da troca
+      } else {
+        // Sucesso normal
+        userRole.value = role
+        currentUserId.value = user.id
+        
+        // Garante que o modo de recuperação esteja desligado
+        uiStore.isRecoveryMode = false 
+        
+        startInactivityTimer()
       }
     } catch (error) {
       console.error("Erro ao procurar perfil:", error);
-      await handleLogout() // Garante que saia se o perfil falhar
+      await handleLogout()
     } finally {
       isAuthReady.value = true
     }
   }
 
   async function handleLogout() {
-    stopInactivityTimer() // 1. Para o timer
-    const { error } = await supabaseClient.auth.signOut() // 2. Desloga
+    stopInactivityTimer()
+    
+    // Importação dinâmica para limpar a UI corretamente
+    const { useUiStore } = await import('./uiStore')
+    const uiStore = useUiStore()
+    
+    uiStore.isRecoveryMode = false
+    uiStore.authModalMode = 'login'
+
+    const { error } = await supabaseClient.auth.signOut()
     if (error) {
-      // Se o logout falhar (raro), pelo menos resetamos o timer
       console.error('Erro no logout:', error.message)
-      resetInactivityTimer()
+      // Se falhar o logout no server, forçamos a limpeza local reiniciando o timer (ou limpando variáveis)
+      resetInactivityTimer() 
     }
     
-  }
+    // Limpeza local garantida
+    userRole.value = null
+    currentUserId.value = null
+  }
 
   async function handleLogin(email: string, password: string) {
     isAuthReady.value = false
@@ -116,17 +129,18 @@ export const useAuthStore = defineStore('auth', () => {
   }
   
   async function handleForgotPassword(email: string) {
-    const redirectTo = `${window.location.origin}/reset-password`;
+    const redirectTo = window.location.origin; 
+    
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) throw error;
   }
 
-  // --- LISTENER (Atualizado) ---
+  // --- LISTENER ---
   supabaseClient.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN' && session?.user) {
       checkUserProfileAndInitialize(session.user);
     } else if (event === 'SIGNED_OUT') {
-      stopInactivityTimer() // 6. PARA O TIMER (failsafe)
+      stopInactivityTimer()
       userRole.value = null
       currentUserId.value = null
       isAuthReady.value = true
@@ -136,11 +150,9 @@ export const useAuthStore = defineStore('auth', () => {
        } else {
          isAuthReady.value = true;
        }
-    }
+    } 
   });
 
-  
-  // Exporta o estado e as funções
   return {
     userRole,
     currentUserId,

@@ -1,11 +1,10 @@
-// src/stores/uiStore.ts (Corrigido)
-
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 // --- Tipos ---
 export type ModalName = 'none' | 'ranking' | 'dashboard' | 'admin'
 export type ThemeName = 'light' | 'dark' | 'system'
+export type AuthModalMode = 'login' | 'register' | 'update_password'
 
 export interface Notification {
   id: number
@@ -28,6 +27,11 @@ export const useUiStore = defineStore('ui', () => {
   const isConfirmModalOpen = ref(false)
   const confirmOptions = ref<ConfirmOptions | null>(null)
   const theme = ref<ThemeName>('system')
+
+  // --- NOVOS ESTADOS PARA CORREÇÃO DOS BUGS DE SENHA ---
+  const isRecoveryMode = ref(false)
+  const authModalMode = ref<AuthModalMode>('login')
+  // ----------------------------------------------------
 
   // --- ACTIONS ---
   
@@ -53,12 +57,11 @@ export const useUiStore = defineStore('ui', () => {
   // --- Ações de Modal ---
   function openModal(name: ModalName) {
     activeModal.value = name
-    document.body.style.overflow = 'hidden' // ✅ CORREÇÃO: Trava o scroll do body
+    document.body.style.overflow = 'hidden' 
   }
 
   function closeModal() {
     activeModal.value = 'none'
-    // ✅ CORREÇÃO: Só destrava o scroll se o modal de confirmação também estiver fechado
     if (!isConfirmModalOpen.value) {
       document.body.style.overflow = ''
     }
@@ -89,13 +92,12 @@ export const useUiStore = defineStore('ui', () => {
       okButtonClass: options.okButtonClass || 'bg-green-600 hover:bg-green-700',
     }
     isConfirmModalOpen.value = true
-    document.body.style.overflow = 'hidden' // ✅ CORREÇÃO: Trava o scroll do body
+    document.body.style.overflow = 'hidden' 
   }
 
   function closeConfirmModal() {
     isConfirmModalOpen.value = false
     confirmOptions.value = null
-    // ✅ CORREÇÃO: Só destrava o scroll se o modal principal também estiver fechado
     if (activeModal.value === 'none') {
       document.body.style.overflow = ''
     }
@@ -114,6 +116,8 @@ export const useUiStore = defineStore('ui', () => {
     isConfirmModalOpen,
     confirmOptions,
     theme,
+    isRecoveryMode,
+    authModalMode,
     
     openModal,
     closeModal,
