@@ -4,12 +4,12 @@ import { supabaseClient } from '../lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
 
 // --- TRAVA DE SEGURANÇA (BOOT LOCK) ---
-// Captura a flag de recuperação IMEDIATAMENTE ao carregar o arquivo.
-// Isso acontece antes do Supabase limpar a URL ou disparar eventos.
-const IS_RECOVERY_URL = window.location.hash && window.location.hash.includes('type=recovery');
+// Detecta se a página foi carregada com um link de recuperação.
+// Usamos isso para impedir que o Listener processe logins automáticos indesejados.
+const IS_RECOVERY_BOOT = window.location.hash && window.location.hash.includes('type=recovery');
 
-if (IS_RECOVERY_URL) {
-  console.warn("🚨 MODO RECUPERAÇÃO DETECTADO NO BOOT - Bloqueando login automático.");
+if (IS_RECOVERY_BOOT) {
+  console.warn("🚨 MODO RECUPERAÇÃO DETECTADO NO BOOT.");
 }
 
 // Constante de inatividade (15 minutos)
@@ -53,26 +53,25 @@ export const useAuthStore = defineStore('auth', () => {
 
   // --- ACTIONS ---
 
+  // Função central que decide se o usuário entra ou se troca a senha
   async function checkUserProfileAndInitialize(user: User) {
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore()
 
-    // 1. REGRA DE OURO: SE VEIO PELO LINK DE E-MAIL, NUNCA LIBERE O ACESSO
-    if (IS_RECOVERY_URL) {
-       console.log("🔒 Bloqueio de Recuperação Ativo. Mantendo usuário no Modal.");
-       
+    // 1. SE ESTAMOS NO BOOT DE RECUPERAÇÃO, TRAVAMOS TUDO
+    if (IS_RECOVERY_BOOT) {
+       console.log("🔒 Boot de Recuperação: Forçando modal de senha.");
        uiStore.authModalMode = 'update_password';
        uiStore.isRecoveryMode = true; 
-       
-       // Definimos o ID para permitir o update, mas NÃO o Role.
-       // Sem Role, o App.vue não renderiza o Dashboard.
        currentUserId.value = user.id;
        isAuthReady.value = true;
-       return; 
+       return; // Não carrega dashboard
     }
 
     try {
-      // 2. VERIFICAÇÃO DE BANCO DE DADOS (PRIMEIRO ACESSO)
+      console.log("🔍 Verificando perfil do usuário...");
+      
+      // 2. BUSCA PERFIL (Para ver se precisa trocar senha)
       const { data: profile, error: profileError } = await supabaseClient
         .from('profiles')
         .select('must_change_password')
@@ -82,30 +81,36 @@ export const useAuthStore = defineStore('auth', () => {
       if (profileError) throw profileError
 
       if (profile.must_change_password) {
-        console.warn("🔒 Bloqueio de Primeiro Acesso. Usuário deve trocar a senha.");
+        console.warn("⚠️ Usuário precisa trocar a senha (Banco de Dados).");
         
         uiStore.authModalMode = 'update_password';
         uiStore.isRecoveryMode = true;
 
-        // Mantemos bloqueado (sem role)
+        // Mantemos userRole null para não abrir o dashboard
         currentUserId.value = user.id;
       } else {
-        // 3. LIBERAÇÃO TOTAL (Apenas se passou por todas as travas)
-        console.log("✅ Login seguro efetuado.");
-        uiStore.isRecoveryMode = false;
-        uiStore.authModalMode = 'login';
+        // 3. TUDO CERTO - LIBERA ACESSO
+        console.log("✅ Perfil OK. Carregando Role...");
         
         const { data: role, error: roleError } = await supabaseClient.rpc('get_my_role')
         if (roleError) throw roleError
         
-        userRole.value = role; // <--- SÓ AQUI O SITE ABRE
+        // Limpa estados de recuperação
+        uiStore.isRecoveryMode = false;
+        uiStore.authModalMode = 'login';
+        
+        // Define usuário logado -> ISSO ABRE O DASHBOARD NO APP.VUE
+        userRole.value = role; 
         currentUserId.value = user.id;
         
         startInactivityTimer();
       }
     } catch (error) {
-      console.error("Erro crítico na verificação de perfil:", error);
-      await handleLogout();
+      console.error("❌ Erro ao inicializar perfil:", error);
+      // Se falhar o carregamento do perfil, deslogamos para evitar estados inconsistentes
+      // Mas relançamos o erro para o UI saber
+      await handleLogout(); 
+      throw error; 
     } finally {
       isAuthReady.value = true;
     }
@@ -127,15 +132,23 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function handleLogin(email: string, password: string) {
     isAuthReady.value = false
-    const { error } = await supabaseClient.auth.signInWithPassword({
+    
+    // 1. Faz o Login no Supabase
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
         email,
         password,
     });
+
     if (error) throw error;
+
+    // 2. IMPORTANTE: Chama a verificação manualmente e AGUARDA ela terminar.
+    // Isso garante que se der erro no perfil, o AuthModal recebe o erro e para o spinner.
+    if (data.user) {
+        await checkUserProfileAndInitialize(data.user);
+    }
   }
   
   async function handleForgotPassword(email: string) {
-    // Garante URL limpa para o redirecionamento
     let baseUrl = (window.location.origin + window.location.pathname)
       .replace(/\/index\.html$/, '') 
       .replace(/\/+$/, '');
@@ -149,31 +162,22 @@ export const useAuthStore = defineStore('auth', () => {
 
   // --- LISTENER ---
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    // Se a flag de URL estiver ativa, ignoramos qualquer evento de sucesso
-    // e forçamos a interface de recuperação
-    if (IS_RECOVERY_URL) {
-        const { useUiStore } = await import('./uiStore');
-        const uiStore = useUiStore();
-        if (!uiStore.isRecoveryMode) {
-             uiStore.isRecoveryMode = true;
-             uiStore.authModalMode = 'update_password';
-        }
-    }
+    // Se for recuperação via link, a prioridade é do Boot Lock
+    if (IS_RECOVERY_BOOT) return;
 
-    if (event === 'SIGNED_IN' && session?.user) {
-      await checkUserProfileAndInitialize(session.user);
-    } else if (event === 'SIGNED_OUT') {
+    // Se o evento for login, mas nós já temos o userRole (porque o handleLogin já rodou),
+    // ignoramos para evitar chamadas duplas.
+    if (event === 'SIGNED_IN' && session?.user && !userRole.value) {
+       console.log("⚡ Listener detectou login (sessão restaurada ou auto-login)");
+       // Usamos catch aqui para não quebrar o listener global, já que não tem UI para mostrar erro
+       await checkUserProfileAndInitialize(session.user).catch(err => console.error("Erro no Listener:", err));
+    } 
+    else if (event === 'SIGNED_OUT') {
       stopInactivityTimer()
       userRole.value = null
       currentUserId.value = null
       isAuthReady.value = true
-    } else if (event === 'INITIAL_SESSION') {
-       if (session?.user) {
-         await checkUserProfileAndInitialize(session.user);
-       } else {
-         isAuthReady.value = true;
-       }
-    } 
+    }
   });
 
   return {
