@@ -131,10 +131,15 @@ export const useAuthStore = defineStore('auth', () => {
   }
   
   async function handleForgotPassword(email: string) {
-    const redirectTo = window.location.origin; 
+    let redirectTo = window.location.origin + window.location.pathname;
+
+    redirectTo = redirectTo.replace(/\/+$/, ""); 
+    
+    console.log("Link de redirecionamento gerado:", redirectTo);
+
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) throw error;
-  }
+}
 
   // --- LISTENER ---
   supabaseClient.auth.onAuthStateChange((event, session) => {
