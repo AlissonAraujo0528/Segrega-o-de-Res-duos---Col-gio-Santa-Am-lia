@@ -18,7 +18,6 @@ export const useAuthStore = defineStore('auth', () => {
   // --- FUNÇÕES DE INATIVIDADE ---
   
   async function logoutDueToInactivity() {
-    // Importação dinâmica para evitar Dependência Circular
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore() 
     uiStore.showToast('Você foi desconectado por inatividade.', 'info')
@@ -46,10 +45,10 @@ export const useAuthStore = defineStore('auth', () => {
     })
   }
 
-  // --- ACTIONS ---
+  // --- ACTIONS (CORRIGIDAS) ---
 
   async function checkUserProfileAndInitialize(user: User) {
-    // Importação dinâmica aqui dentro para garantir que o Pinia já subiu
+    // IMPORTANTE: Importamos a store ANTES de tudo para garantir que ela esteja pronta
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore()
 
@@ -66,26 +65,30 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (profileError) throw profileError
 
-      // --- TRATAMENTO DE TROCA DE SENHA ---
+      // --- CORREÇÃO DA LÓGICA DE TROCA DE SENHA ---
       if (profile.must_change_password) {
         console.warn("Usuário precisa trocar a senha - Ativando modo de recuperação");
         
-        // 1. Mantemos logado para permitir a troca
+        // PASSO CRUCIAL 1: Configurar a UI para MODO DE RECUPERAÇÃO *ANTES* de logar o usuário
+        // Isso impede que o App.vue esconda o modal quando userRole for definido
+        uiStore.authModalMode = 'update_password' 
+        uiStore.isRecoveryMode = true 
+        
+        // PASSO CRUCIAL 2: Agora sim, definimos o usuário como logado
+        // Como isRecoveryMode já é true, o Modal permanecerá aberto
         userRole.value = role
         currentUserId.value = user.id
 
-        // 2. Acionamos a UI
-        uiStore.authModalMode = 'update_password' 
-        uiStore.isRecoveryMode = true // Isso impede o App.vue de esconder o modal
-        
-        // NÃO iniciamos o timer de inatividade aqui para não deslogar o usuário no meio da troca
+        // Não iniciamos o timer de inatividade aqui para não atrapalhar a troca de senha
       } else {
-        // Sucesso normal
-        userRole.value = role
-        currentUserId.value = user.id
+        // Fluxo normal (Login com sucesso)
         
         // Garante que o modo de recuperação esteja desligado
         uiStore.isRecoveryMode = false 
+        
+        // Define usuário logado
+        userRole.value = role
+        currentUserId.value = user.id
         
         startInactivityTimer()
       }
@@ -110,13 +113,12 @@ export const useAuthStore = defineStore('auth', () => {
     const { error } = await supabaseClient.auth.signOut()
     if (error) {
       console.error('Erro no logout:', error.message)
-      // Se falhar o logout no server, forçamos a limpeza local reiniciando o timer (ou limpando variáveis)
       resetInactivityTimer() 
     }
     
-    // Limpeza local garantida
     userRole.value = null
     currentUserId.value = null
+    // window.location.reload() // Opcional: recarregar para limpar qualquer estado residual
   }
 
   async function handleLogin(email: string, password: string) {
@@ -130,7 +132,6 @@ export const useAuthStore = defineStore('auth', () => {
   
   async function handleForgotPassword(email: string) {
     const redirectTo = window.location.origin; 
-    
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) throw error;
   }
