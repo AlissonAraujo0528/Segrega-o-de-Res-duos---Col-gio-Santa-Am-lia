@@ -3,24 +3,16 @@ import { ref } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
 
-// --- TRAVA DE SEGURANÇA (BOOT LOCK) ---
-const IS_RECOVERY_BOOT = window.location.hash && window.location.hash.includes('type=recovery');
-
-if (IS_RECOVERY_BOOT) {
-  console.warn("[AuthDebug] 🚨 MODO RECUPERAÇÃO DETECTADO NO BOOT.");
-}
-
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutos
 
 export const useAuthStore = defineStore('auth', () => {
-  // --- STATE ---
   const userRole = ref<string | null>(null)
   const currentUserId = ref<string | null>(null)
   const isAuthReady = ref(false)
   const inactivityTimer = ref<number | undefined>(undefined)
   
-  // Flag para controle manual
-  let isManualLogin = false; 
+  // Flag para evitar conflito entre login manual e listener
+  let isProcessingLogin = false
 
   // --- FUNÇÕES DE INATIVIDADE ---
   async function logoutDueToInactivity() {
@@ -54,78 +46,98 @@ export const useAuthStore = defineStore('auth', () => {
   // --- ACTIONS ---
 
   async function checkUserProfileAndInitialize(user: User) {
-    console.log("[AuthDebug] 🔍 checkUserProfileAndInitialize iniciado para:", user.email);
-    
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore()
 
-    // 1. Boot Lock Check
-    if (IS_RECOVERY_BOOT) {
-       console.log("[AuthDebug] 🔒 Boot de Recuperação: Travando tudo.");
-       uiStore.authModalMode = 'update_password';
-       uiStore.isRecoveryMode = true; 
-       currentUserId.value = user.id;
-       isAuthReady.value = true;
-       return; 
+    // 1. Se tiver hash de recuperação, prioridade total para o fluxo de senha
+    const isRecoveryUrl = window.location.hash && window.location.hash.includes('type=recovery')
+    
+    if (isRecoveryUrl) {
+        console.log("🔗 Link de recuperação detectado. Abrindo modal.")
+        uiStore.authModalMode = 'update_password'
+        uiStore.isRecoveryMode = true
+        currentUserId.value = user.id
+        // NÃO setamos userRole, mantendo a Dashboard fechada
+        isAuthReady.value = true
+        return
     }
 
     try {
-      // 2. Perfil Check
-      console.log("[AuthDebug] Buscando perfil na tabela 'profiles'...");
+      console.log("🔍 Verificando perfil...")
+      
       const { data: profile, error: profileError } = await supabaseClient
         .from('profiles')
         .select('must_change_password')
         .eq('id', user.id)
         .single()
 
-      if (profileError) {
-        console.error("[AuthDebug] ❌ Erro ao buscar perfil:", profileError);
-        throw profileError;
-      }
-      
-      console.log("[AuthDebug] Perfil encontrado. must_change_password:", profile.must_change_password);
+      if (profileError) throw profileError
 
       if (profile.must_change_password) {
-        console.warn("[AuthDebug] ⚠️ Usuário precisa trocar senha. Bloqueando acesso.");
-        uiStore.authModalMode = 'update_password';
-        uiStore.isRecoveryMode = true;
-        currentUserId.value = user.id;
-        // userRole permanece null
+        console.log("⚠️ Flag de troca de senha ativa.")
+        uiStore.authModalMode = 'update_password'
+        uiStore.isRecoveryMode = true
+        currentUserId.value = user.id
+        // Mantém userRole null
       } else {
-        // 3. Login Normal
-        console.log("[AuthDebug] ✅ Perfil OK. Buscando Role (RPC get_my_role)...");
-        
+        console.log("✅ Acesso permitido. Carregando Role...")
         const { data: role, error: roleError } = await supabaseClient.rpc('get_my_role')
+        if (roleError) throw roleError
         
-        if (roleError) {
-             console.error("[AuthDebug] ❌ Erro no RPC get_my_role:", roleError);
-             throw roleError;
-        }
-
-        console.log("[AuthDebug] Role recebida:", role);
+        // Libera o sistema
+        uiStore.isRecoveryMode = false
+        uiStore.authModalMode = 'login'
+        userRole.value = role
+        currentUserId.value = user.id
         
-        // Destrava UI
-        uiStore.isRecoveryMode = false;
-        uiStore.authModalMode = 'login';
-        
-        // Libera Dashboard
-        userRole.value = role; 
-        currentUserId.value = user.id;
-        
-        startInactivityTimer();
-        console.log("[AuthDebug] 🚀 Acesso LIBERADO!");
+        startInactivityTimer()
       }
     } catch (error) {
-      console.error("[AuthDebug] 💥 Erro fatal em checkUserProfile:", error);
-      await handleLogout(); 
-      throw error; 
+      console.error("Erro na verificação:", error)
+      await handleLogout()
     } finally {
-      isAuthReady.value = true;
+      isAuthReady.value = true
+    }
+  }
+
+  // --- NOVA FUNÇÃO MÁGICA: TRANSIÇÃO SEM RELOAD ---
+  async function completePasswordRecovery() {
+    const { useUiStore } = await import('./uiStore')
+    const uiStore = useUiStore()
+    
+    console.log("🔄 Finalizando recuperação de senha...")
+
+    try {
+        // 1. Limpa a URL para remover o token sem recarregar a página
+        window.history.replaceState(null, '', window.location.pathname)
+
+        // 2. Obtém o usuário atual (já logado com a nova senha)
+        const { data: { user } } = await supabaseClient.auth.getUser()
+        if (!user) throw new Error("Usuário perdido após update.")
+
+        // 3. Busca a Role para liberar o acesso
+        const { data: role, error: roleError } = await supabaseClient.rpc('get_my_role')
+        if (roleError) throw roleError
+
+        // 4. Atualiza estado e libera Dashboard
+        uiStore.isRecoveryMode = false
+        uiStore.authModalMode = 'login'
+        
+        userRole.value = role
+        currentUserId.value = user.id
+        
+        startInactivityTimer()
+        console.log("🎉 Recuperação concluída. Dashboard aberta.")
+
+    } catch (e) {
+        console.error("Erro ao finalizar recuperação:", e)
+        // Se der erro aqui, aí sim forçamos um logout/reload como fallback
+        await handleLogout()
+        window.location.reload()
     }
   }
 
   async function handleLogout() {
-    console.log("[AuthDebug] Fazendo Logout...");
     stopInactivityTimer()
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore()
@@ -133,53 +145,27 @@ export const useAuthStore = defineStore('auth', () => {
     uiStore.isRecoveryMode = false
     uiStore.authModalMode = 'login'
 
-    // Limpa storage local para evitar "sujeira"
-    localStorage.removeItem('sb-' + import.meta.env.VITE_SUPABASE_URL + '-auth-token') // Tentativa genérica de limpeza
-
     await supabaseClient.auth.signOut()
     
     userRole.value = null
     currentUserId.value = null
-    console.log("[AuthDebug] Logout concluído.");
   }
 
-  // --- LOGIN MANUAL ---
   async function handleLogin(email: string, password: string) {
-    console.log("[AuthDebug] Botão 'Entrar' clicado via handleLogin.");
-    isAuthReady.value = false;
-    isManualLogin = true; 
-    
+    isProcessingLogin = true
     try {
-        console.log("[AuthDebug] Chamando supabase.auth.signInWithPassword...");
         const { data, error } = await supabaseClient.auth.signInWithPassword({
             email,
             password,
         });
 
-        if (error) {
-            console.error("[AuthDebug] ❌ Erro no Supabase Login:", error.message);
-            throw error;
-        }
-
-        console.log("[AuthDebug] Supabase Login OK. User:", data.user?.id);
-
+        if (error) throw error;
+        
         if (data.user) {
-            console.log("[AuthDebug] Iniciando verificação de perfil...");
-            await checkUserProfileAndInitialize(data.user);
-        } else {
-            console.warn("[AuthDebug] Login sem dados de usuário?");
+            await checkUserProfileAndInitialize(data.user)
         }
-    } catch (error) {
-        console.error("[AuthDebug] Erro capturado no handleLogin:", error);
-        throw error; 
     } finally {
-        console.log("[AuthDebug] Finalizando handleLogin (finally block).");
-        // Pequeno delay para garantir que o listener não sobrescreva
-        setTimeout(() => { 
-            isManualLogin = false; 
-            console.log("[AuthDebug] isManualLogin = false");
-        }, 500);
-        isAuthReady.value = true;
+        isProcessingLogin = false
     }
   }
   
@@ -187,28 +173,28 @@ export const useAuthStore = defineStore('auth', () => {
     let baseUrl = (window.location.origin + window.location.pathname)
       .replace(/\/index\.html$/, '') 
       .replace(/\/+$/, '');
-      
-    const redirectTo = baseUrl; 
-    console.log("[AuthDebug] Enviando reset para:", redirectTo);
     
-    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: baseUrl });
     if (error) throw error;
   }
 
   // --- LISTENER ---
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    console.log(`[AuthDebug] 👂 Evento Listener: ${event} | ManualLogin: ${isManualLogin}`);
-
-    if (isManualLogin) {
-        console.log("[AuthDebug] ✋ Ignorando evento pois isManualLogin é true.");
-        return; 
+    // Se for um evento de recuperação, UI Store assume
+    if (event === 'PASSWORD_RECOVERY') {
+       console.log("⚡ Evento PASSWORD_RECOVERY")
+       const { useUiStore } = await import('./uiStore')
+       const uiStore = useUiStore()
+       uiStore.isRecoveryMode = true
+       uiStore.authModalMode = 'update_password'
+       return
     }
 
-    if (IS_RECOVERY_BOOT) return;
+    // Se estivermos fazendo login manual, ignora para evitar duplicidade
+    if (isProcessingLogin) return
 
     if (event === 'SIGNED_IN' && session?.user && !userRole.value) {
-       console.log("[AuthDebug] ⚡ Auto-login detectado pelo listener.");
-       await checkUserProfileAndInitialize(session.user).catch(err => console.error(err));
+       await checkUserProfileAndInitialize(session.user)
     } 
     else if (event === 'SIGNED_OUT') {
       stopInactivityTimer()
@@ -225,5 +211,7 @@ export const useAuthStore = defineStore('auth', () => {
     handleLogin,
     handleLogout,
     handleForgotPassword,
+    completePasswordRecovery, // Exportando a nova função
+    checkUserProfileAndInitialize
   }
 })

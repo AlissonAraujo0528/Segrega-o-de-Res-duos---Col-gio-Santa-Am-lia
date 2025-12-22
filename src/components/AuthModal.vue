@@ -8,7 +8,6 @@ import { supabaseClient } from '../lib/supabaseClient'
 const authStore = useAuthStore()
 const uiStore = useUiStore()
 
-// Variáveis reativas
 const email = ref('')
 const password = ref('')
 const newPassword = ref('')
@@ -18,14 +17,11 @@ const errorMessage = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const isLoading = ref(false)
 
-// --- ACTIONS ---
-
 async function submitLogin() {
   isLoading.value = true
   errorMessage.value = null
   try {
     await authStore.handleLogin(email.value, password.value)
-    // Se passar daqui, o AuthStore já liberou o acesso.
   } catch (error: any) {
     errorMessage.value = 'Email ou senha inválidos.'
     console.error(error)
@@ -53,15 +49,15 @@ async function submitUpdatePassword() {
   errorMessage.value = null
   
   try {
-    // 1. Atualiza a Autenticação (Senha do Login)
+    // 1. Atualizar Senha no Auth
     const { data: userData, error: authError } = await supabaseClient.auth.updateUser({ 
       password: newPassword.value 
     })
     
     if (authError) throw authError
 
-    // 2. CORREÇÃO CRÍTICA: Atualiza a flag no banco de dados "profiles"
-    // Avisa o sistema que este usuário não precisa mais trocar a senha.
+    // 2. Atualizar Flag no Banco (Profile)
+    // Nota: Requer Policy no Supabase: "create policy ... using (auth.uid() = id) with check (auth.uid() = id)"
     if (userData.user) {
         const { error: profileError } = await supabaseClient
           .from('profiles')
@@ -69,23 +65,16 @@ async function submitUpdatePassword() {
           .eq('id', userData.user.id)
         
         if (profileError) {
-            console.error("Erro ao atualizar perfil:", profileError)
-            // Não vamos travar aqui, pois a senha já foi trocada. Apenas logamos.
+             console.error("Aviso: Falha ao atualizar perfil (possível erro de permissão), mas a senha foi trocada.", profileError)
+             // Não lançamos erro aqui para não travar o usuário, pois o login vai funcionar.
         }
     }
     
-    successMessage.value = 'Senha atualizada com sucesso! Entrando...'
+    successMessage.value = 'Senha atualizada! Entrando...'
     
-    // 3. Limpeza total e Recarregamento
-    setTimeout(() => {
-        // Limpa hash da URL para evitar boot lock no refresh
-        if (window.history.replaceState) {
-            window.history.replaceState(null, '', window.location.pathname);
-        }
-        
-        // Força recarregamento para garantir estado limpo
-        window.location.reload() 
-    }, 1500)
+    // 3. TRANSIÇÃO SUAVE (SEM RELOAD)
+    // Chama a função da store que limpa a URL, busca a role e abre o dashboard
+    await authStore.completePasswordRecovery()
 
   } catch (error: any) {
     errorMessage.value = 'Erro ao atualizar senha: ' + error.message
@@ -94,7 +83,6 @@ async function submitUpdatePassword() {
   }
 }
 
-// --- CONTROLE DE MODO ---
 function setMode(mode: 'login' | 'register' | 'update_password') {
     uiStore.authModalMode = mode
     errorMessage.value = null
