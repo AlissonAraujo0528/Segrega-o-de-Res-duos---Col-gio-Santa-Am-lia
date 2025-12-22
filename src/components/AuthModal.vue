@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useAuthStore } from '../stores/authStore'
-import { useUiStore } from '../stores/uiStore' // Importar a store de UI
+import { useUiStore } from '../stores/uiStore'
 import KlinLogo from '../assets/KLIN.png'
-import { supabaseClient } from '../lib/supabaseClient' // Importar cliente para update de senha
+import { supabaseClient } from '../lib/supabaseClient'
 
 const authStore = useAuthStore()
-const uiStore = useUiStore() // Usar a store de UI
+const uiStore = useUiStore()
 
 // Variáveis reativas
 const email = ref('')
 const password = ref('')
-const newPassword = ref('') // Para a nova senha
+const newPassword = ref('')
 const recoveryEmail = ref('')
 
 const errorMessage = ref<string | null>(null)
@@ -25,7 +25,7 @@ async function submitLogin() {
   errorMessage.value = null
   try {
     await authStore.handleLogin(email.value, password.value)
-    // Sucesso: O App.vue vai fechar o modal automaticamente via v-if="!userRole"
+    // O App.vue fecha o modal automaticamente via v-if="!userRole"
   } catch (error: any) {
     errorMessage.value = 'Email ou senha inválidos.'
   } finally {
@@ -40,7 +40,6 @@ async function submitRecovery() {
   try {
     await authStore.handleForgotPassword(recoveryEmail.value)
     successMessage.value = 'Email de recuperação enviado! Verifique sua caixa de entrada.'
-    // Opcional: Voltar para login após alguns segundos
   } catch (error: any) {
     errorMessage.value = 'Erro ao enviar. Verifique o e-mail digitado.'
   } finally {
@@ -58,14 +57,14 @@ async function submitUpdatePassword() {
 
     successMessage.value = 'Senha atualizada com sucesso!'
     
-    // Reseta o estado da UI e garante o login
+    // Reseta o estado da UI e garante o login limpo
     setTimeout(() => {
-        uiStore.isRecoveryMode = false // Libera o App.vue para esconder o modal
-        uiStore.authModalMode = 'login' // Reseta para o próximo uso
+        uiStore.isRecoveryMode = false 
+        uiStore.authModalMode = 'login' 
         
-        // Força atualização do perfil se necessário
-        authStore.userRole = 'user' // Ou recarregar da base se preferir
-        window.location.reload() // Recarrega para garantir estado limpo (opcional mas recomendado)
+        // Força atualização do perfil/estado
+        authStore.userRole = 'user' 
+        window.location.reload() 
     }, 1500)
 
   } catch (error: any) {
@@ -76,13 +75,6 @@ async function submitUpdatePassword() {
 }
 
 // --- CONTROLE DE MODO ---
-// Helpers para facilitar a leitura no template
-const isLoginMode = computed(() => uiStore.authModalMode === 'login')
-const isForgotMode = computed(() => uiStore.authModalMode === 'register') // Usando 'register' como 'forgot' temporariamente ou crie um novo tipo
-// Nota: No uiStore definimos 'login' | 'register' | 'update_password'. 
-// Vamos assumir que "Esqueci a senha" é um estado visual dentro do modal ou um novo tipo.
-// Para manter simples com seu código anterior, vamos mapear assim:
-
 function setMode(mode: 'login' | 'register' | 'update_password') {
     uiStore.authModalMode = mode
     errorMessage.value = null
@@ -136,7 +128,7 @@ function setMode(mode: 'login' | 'register' | 'update_password') {
             <button class="block w-full text-sm text-primary hover:underline outline-none"
               @click.prevent="setMode('register')" 
             >
-            Esqueci minha senha
+              Esqueci minha senha
             </button>
           </form>
         </div>
