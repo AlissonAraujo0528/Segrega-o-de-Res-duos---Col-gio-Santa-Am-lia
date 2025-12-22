@@ -25,9 +25,10 @@ async function submitLogin() {
   errorMessage.value = null
   try {
     await authStore.handleLogin(email.value, password.value)
-    // O App.vue fecha o modal automaticamente via v-if="!userRole"
+    // Se passar daqui, o AuthStore já liberou o acesso.
   } catch (error: any) {
     errorMessage.value = 'Email ou senha inválidos.'
+    console.error(error)
   } finally {
     isLoading.value = false
   }
@@ -52,19 +53,37 @@ async function submitUpdatePassword() {
   errorMessage.value = null
   
   try {
-    const { error } = await supabaseClient.auth.updateUser({ password: newPassword.value })
-    if (error) throw error
+    // 1. Atualiza a Autenticação (Senha do Login)
+    const { data: userData, error: authError } = await supabaseClient.auth.updateUser({ 
+      password: newPassword.value 
+    })
+    
+    if (authError) throw authError
 
-    // Se tiver trigger no banco atualizando must_change_password, ótimo.
-    // Senão, o login seguinte resolverá.
+    // 2. CORREÇÃO CRÍTICA: Atualiza a flag no banco de dados "profiles"
+    // Avisa o sistema que este usuário não precisa mais trocar a senha.
+    if (userData.user) {
+        const { error: profileError } = await supabaseClient
+          .from('profiles')
+          .update({ must_change_password: false })
+          .eq('id', userData.user.id)
+        
+        if (profileError) {
+            console.error("Erro ao atualizar perfil:", profileError)
+            // Não vamos travar aqui, pois a senha já foi trocada. Apenas logamos.
+        }
+    }
     
-    successMessage.value = 'Senha atualizada com sucesso!'
+    successMessage.value = 'Senha atualizada com sucesso! Entrando...'
     
-    // Reseta o estado da UI e recarrega para limpar tudo e logar limpo
+    // 3. Limpeza total e Recarregamento
     setTimeout(() => {
-        uiStore.isRecoveryMode = false 
-        uiStore.authModalMode = 'login' 
-        // Força recarregamento para garantir que o AuthStore reinicie limpo
+        // Limpa hash da URL para evitar boot lock no refresh
+        if (window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname);
+        }
+        
+        // Força recarregamento para garantir estado limpo
         window.location.reload() 
     }, 1500)
 
