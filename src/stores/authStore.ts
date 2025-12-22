@@ -3,8 +3,8 @@ import { ref } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
 import type { User } from '@supabase/supabase-js'
 
-// 1. CONSTANTE DE INATIVIDADE
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutos
+// Constante de inatividade (15 minutos)
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 
 
 export const useAuthStore = defineStore('auth', () => {
   // --- STATE ---
@@ -12,11 +12,9 @@ export const useAuthStore = defineStore('auth', () => {
   const currentUserId = ref<string | null>(null)
   const isAuthReady = ref(false)
   
-  // 2. STATE PARA O TIMER
   const inactivityTimer = ref<number | undefined>(undefined)
 
   // --- FUNÇÕES DE INATIVIDADE ---
-  
   async function logoutDueToInactivity() {
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore() 
@@ -48,7 +46,7 @@ export const useAuthStore = defineStore('auth', () => {
   // --- ACTIONS (CORRIGIDAS) ---
 
   async function checkUserProfileAndInitialize(user: User) {
-    // IMPORTANTE: Importamos a store ANTES de tudo para garantir que ela esteja pronta
+    // Importar UI store antes de tudo para garantir controle
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore()
 
@@ -67,33 +65,28 @@ export const useAuthStore = defineStore('auth', () => {
 
       // --- CORREÇÃO DA LÓGICA DE TROCA DE SENHA ---
       if (profile.must_change_password) {
-        console.warn("Usuário precisa trocar a senha - Ativando modo de recuperação");
+        console.warn("Usuário precisa trocar a senha - Travando interface em modo recuperação");
         
-        // PASSO CRUCIAL 1: Configurar a UI para MODO DE RECUPERAÇÃO *ANTES* de logar o usuário
-        // Isso impede que o App.vue esconda o modal quando userRole for definido
+        // 1. PRIMEIRO: Travamos a UI no modo de recuperação
         uiStore.authModalMode = 'update_password' 
         uiStore.isRecoveryMode = true 
         
-        // PASSO CRUCIAL 2: Agora sim, definimos o usuário como logado
-        // Como isRecoveryMode já é true, o Modal permanecerá aberto
+        // 2. SEGUNDO: Definimos o usuário (o App.vue não vai fechar o modal por causa do passo 1)
         userRole.value = role
         currentUserId.value = user.id
 
-        // Não iniciamos o timer de inatividade aqui para não atrapalhar a troca de senha
+        // OBS: Não iniciamos o timer de inatividade aqui para não atrapalhar
       } else {
-        // Fluxo normal (Login com sucesso)
+        // Fluxo normal (Login com sucesso e senha em dia)
+        uiStore.isRecoveryMode = false // Garante destravamento
         
-        // Garante que o modo de recuperação esteja desligado
-        uiStore.isRecoveryMode = false 
-        
-        // Define usuário logado
         userRole.value = role
         currentUserId.value = user.id
         
         startInactivityTimer()
       }
     } catch (error) {
-      console.error("Erro ao procurar perfil:", error);
+      console.error("Erro ao carregar perfil:", error);
       await handleLogout()
     } finally {
       isAuthReady.value = true
@@ -103,43 +96,48 @@ export const useAuthStore = defineStore('auth', () => {
   async function handleLogout() {
     stopInactivityTimer()
     
-    // Importação dinâmica para limpar a UI corretamente
     const { useUiStore } = await import('./uiStore')
     const uiStore = useUiStore()
     
+    // Reseta estados visuais
     uiStore.isRecoveryMode = false
     uiStore.authModalMode = 'login'
 
     const { error } = await supabaseClient.auth.signOut()
     if (error) {
       console.error('Erro no logout:', error.message)
+      // Força limpeza local mesmo com erro de rede
       resetInactivityTimer() 
     }
     
     userRole.value = null
     currentUserId.value = null
-    // window.location.reload() // Opcional: recarregar para limpar qualquer estado residual
   }
 
   async function handleLogin(email: string, password: string) {
     isAuthReady.value = false
     const { error } = await supabaseClient.auth.signInWithPassword({
-        email: email,
-        password: password,
+        email,
+        password,
     });
     if (error) throw error;
   }
   
   async function handleForgotPassword(email: string) {
-    let redirectTo = window.location.origin + window.location.pathname;
-
-    redirectTo = redirectTo.replace(/\/+$/, ""); 
+    // CORREÇÃO DO REDIRECT:
+    // Pega a URL base (ex: https://site.com/pasta/) sem 'index.html' no final
+    let baseUrl = (window.location.origin + window.location.pathname)
+      .replace(/\/index\.html$/, '') 
+      .replace(/\/+$/, ''); // Remove barra final se tiver
+      
+    // Importante: Essa URL deve estar autorizada no painel do Supabase
+    const redirectTo = baseUrl; 
     
-    console.log("Link de redirecionamento gerado:", redirectTo);
+    console.log("Enviando e-mail de recuperação para redirecionar em:", redirectTo);
 
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) throw error;
-}
+  }
 
   // --- LISTENER ---
   supabaseClient.auth.onAuthStateChange((event, session) => {
@@ -157,6 +155,7 @@ export const useAuthStore = defineStore('auth', () => {
          isAuthReady.value = true;
        }
     } 
+    // Nota: O evento PASSWORD_RECOVERY também é tratado no App.vue
   });
 
   return {

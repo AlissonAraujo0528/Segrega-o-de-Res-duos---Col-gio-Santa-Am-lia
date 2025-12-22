@@ -55,15 +55,16 @@ async function submitUpdatePassword() {
     const { error } = await supabaseClient.auth.updateUser({ password: newPassword.value })
     if (error) throw error
 
+    // Se tiver trigger no banco atualizando must_change_password, ótimo.
+    // Senão, o login seguinte resolverá.
+    
     successMessage.value = 'Senha atualizada com sucesso!'
     
-    // Reseta o estado da UI e garante o login limpo
+    // Reseta o estado da UI e recarrega para limpar tudo e logar limpo
     setTimeout(() => {
         uiStore.isRecoveryMode = false 
         uiStore.authModalMode = 'login' 
-        
-        // Força atualização do perfil/estado
-        authStore.userRole = 'user' 
+        // Força recarregamento para garantir que o AuthStore reinicie limpo
         window.location.reload() 
     }, 1500)
 
