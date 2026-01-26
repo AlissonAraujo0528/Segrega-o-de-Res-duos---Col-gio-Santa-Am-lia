@@ -11,7 +11,7 @@ export interface KpiData {
 }
 
 export interface RankedSector {
-  sector_id: string          // UUID
+  sector_id: string          // UUID (String)
   sector_name: string
   average: number
   count: number
@@ -39,7 +39,7 @@ export interface HistoryItem {
   foto_url?: string | null
   responsible_name?: string
   setores?: {
-    name: string // 'nome' virou 'name'
+    name: string // Mantemos 'name' para alinhar com o banco e o componente novo
   }
 }
 
@@ -67,12 +67,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   /**
    * Busca todos os meses que possuem avaliações registradas
-   * CORREÇÃO: Tabela 'evaluations'
    */
   async function fetchAvailablePeriods() {
     try {
       const { data, error: err } = await supabaseClient
-        .from('evaluations') // <--- CORRIGIDO
+        .from('evaluations') 
         .select('created_at')
         .order('created_at', { ascending: false })
 
@@ -107,7 +106,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   /**
    * Busca e calcula os dados KPIs para um mês/ano específico
-   * CORREÇÃO: Tabelas e colunas em inglês
    */
   async function fetchDashboardData(month: number, year: number) {
     isLoading.value = true
@@ -121,11 +119,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
 
       const { data, error: err } = await supabaseClient
-        .from('evaluations') // <--- CORRIGIDO
+        .from('evaluations') 
         .select(`
-          score,             // era 'nota'
+          score,
           sector_id,
-          sectors ( name )   // era 'setores ( nome )'
+          sectors ( name )
         `)
         .gte('created_at', startDate)
         .lte('created_at', endDate)
@@ -134,14 +132,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
       if (!data || data.length === 0) return 
 
       const totalDocs = data.length
-      // Mapeia score (nota) corretamente
       const sumTotal = data.reduce((acc, curr: any) => acc + (curr.score || 0), 0)
       
       const sectorsMap = new Map<string, { name: string, totalScore: number, count: number }>()
 
       data.forEach((item: any) => {
-        const sId = item.sector_id
-        const sName = item.sectors?.name || 'Desconhecido' // item.sectors (tabela) .name (coluna)
+        const sId = item.sector_id // UUID string
+        const sName = item.sectors?.name || 'Desconhecido'
         const score = item.score || 0
 
         if (!sectorsMap.has(sId)) {
@@ -186,7 +183,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   /**
    * Busca o histórico detalhado para a aba de "Histórico"
-   * CORREÇÃO: Tabelas e colunas em inglês
    */
   async function fetchRecentHistory(month: number, year: number) {
     isLoading.value = true
@@ -196,11 +192,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const startDate = new Date(year, month - 1, 1).toISOString()
       const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
 
-      // CORREÇÃO: Colunas corretas do SQL
       const { data, error: err } = await supabaseClient
         .from('evaluations') 
         .select(`
-          id, created_at, score, observations, responsible,
+          id, created_at, score, observations, responsible, details,
           sectors ( name )
         `)
         .gte('created_at', startDate)
@@ -211,8 +206,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
       recentEvaluations.value = (data || []).map((item: any) => {
         let details: string[] = []
-        // Mapeia colunas do banco para as propriedades esperadas pelo front
-        // Banco: observations -> Front: observacao (para manter compatibilidade com o componente visual)
         let cleanObs = item.observations || '' 
 
         try {
@@ -239,18 +232,17 @@ export const useDashboardStore = defineStore('dashboard', () => {
           }
         } catch (e) { }
         
-        // Retorna objeto formatado para o HistoryItem
         return {
           id: item.id,
           created_at: item.created_at,
-          nota: item.score, // Mapeia score -> nota
+          nota: item.score,
           observacao: item.observations,
           cleanObservation: cleanObs,
           issues: details,
-          foto_url: null, // Se tiver URL no JSON, extrair aqui
-          responsible_name: item.responsible, // Mapeia responsible -> responsible_name
+          foto_url: item.details?.photo_url || null, // Busca a foto do JSON
+          responsible_name: item.responsible,
           setores: {
-            nome: item.sectors?.name // Mapeia name -> nome
+            name: item.sectors?.name // CORREÇÃO: Mapeia para 'name' (não 'nome')
           }
         }
       }) as unknown as HistoryItem[]
