@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useEvaluationStore, type EvaluationData } from '../stores/evaluationStore'
+import { ref, computed, watch, reactive } from 'vue'
+import { useEvaluationStore, type EvaluationFormPayload } from '../stores/evaluationStore'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import KlinLogo from '../assets/KLIN.png'
@@ -11,369 +11,340 @@ const evaluationStore = useEvaluationStore()
 const authStore = useAuthStore()
 const uiStore = useUiStore()
 
-const evaluator = ref('')
-const evaluationDate = ref<string>((new Date().toISOString().split('T')[0]) as string) 
-const sector = ref('')
-const responsible = ref('')
-const observations = ref('')
-const questions = ref([
+// --- Estado do Formulário ---
+const form = reactive({
+  evaluator: '',
+  date: new Date().toISOString().split('T')[0],
+  sectorId: null as number | null,
+  responsible: '',
+  observations: '',
+  image: null as File | null
+})
+
+// Perguntas fixas (poderiam vir do banco no futuro)
+const questions = [
   { id: 'organicos', text: 'Sem presença de resíduos orgânicos nos recicláveis' },
   { id: 'sanitarios', text: 'Sem presença de papéis sanitários nos recicláveis' },
   { id: 'outros', text: 'Sem outros não recicláveis (Ex.: Clipes, fitas, etc.)' },
   { id: 'nivel', text: 'Nível dos coletores adequado' },
-])
-const answers = ref<Record<string, string>>({})
-const isLoading = ref(false)
-const successMessage = ref<string | null>(null)
-const errorMessage = ref<string | null>(null)
+]
 
-const validationState = ref({
-  evaluator: false,
-  evaluationDate: false,
-  sector: false,
-  responsible: false,
-  questions: false,
+// Respostas reativas
+const answers = reactive<Record<string, string>>({})
+
+// Estado local de UI
+const successMessage = ref<string | null>(null)
+const imagePreview = ref<string | null>(null)
+
+// --- Computed Properties ---
+const totalScore = computed(() => {
+  return Object.values(answers).reduce((sum, val) => sum + (parseInt(val) || 0), 0)
 })
 
+const isFormValid = computed(() => {
+  const allQuestionsAnswered = questions.every(q => !!answers[q.id])
+  return form.evaluator && form.date && form.sectorId && form.responsible && allQuestionsAnswered
+})
+
+const today = new Date().toISOString().split('T')[0]
+
+// --- Watchers e Efeitos ---
+
+// Preencher formulário ao editar
 watch(() => evaluationStore.dataToEdit, (newData) => {
   if (newData) {
-    evaluator.value = newData.evaluator
-    evaluationDate.value = newData.date
-    sector.value = newData.sector_id
-    responsible.value = newData.responsible
-    observations.value = newData.observations
+    form.evaluator = newData.evaluator
+    form.date = newData.date // Data já vem formatada do banco ou precisa ajustar?
+    form.sectorId = newData.sector_id
+    form.responsible = newData.responsible
+    form.observations = newData.observations || ''
     
-    const newAnswers: Record<string, string> = {}
-    questions.value.forEach(q => {
-      const value = newData.details?.[q.id];
-      if (value != null) { 
-        newAnswers[q.id] = value.toString();
-      }
-    })
-    answers.value = newAnswers
+    // Resetar respostas antigas
+    Object.keys(answers).forEach(k => delete answers[k])
+    
+    // Preencher novas (se o banco salvar JSON em 'details', ajuste aqui. 
+    // Como simplificamos para nota única no banco, talvez você queira salvar o JSON em 'observacao' ou uma coluna extra 'details')
+    // Assumindo que a nota total é o que importa para o banco agora:
+    // Se precisar reconstruir as respostas individuais a partir da nota total, é complexo. 
+    // Sugestão: Apenas exiba a nota total na edição ou adicione coluna JSONB 'details' no banco.
   }
 })
 
-const totalScore = computed(() => {
-  return Object.values(answers.value).reduce((sum, val) => {
-    return sum + (parseInt(val, 10) || 0)
-  }, 0)
-})
+// --- Ações ---
 
-const today = computed(() => new Date().toISOString().split('T')[0])
+function handleImageUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files[0]) {
+    const file = input.files[0]
+    form.image = file
+    
+    // Preview
+    const reader = new FileReader()
+    reader.onload = (e) => imagePreview.value = e.target?.result as string
+    reader.readAsDataURL(file)
+  }
+}
 
 function resetForm() {
-  evaluator.value = ''
-  sector.value = ''
-  responsible.value = ''
-  observations.value = ''
-  answers.value = {}
-
-  evaluationDate.value = (new Date().toISOString().split('T')[0]) as string
-  validationState.value = {
-    evaluator: false,
-    evaluationDate: false,
-    sector: false,
-    responsible: false,
-    questions: false,
-  }
+  form.evaluator = ''
+  form.sectorId = null
+  form.responsible = ''
+  form.observations = ''
+  form.image = null
+  form.date = today
+  imagePreview.value = null
+  
+  Object.keys(answers).forEach(k => delete answers[k])
+  successMessage.value = null
   
   evaluationStore.clearEditMode()
 }
 
 async function handleSubmit() {
-  isLoading.value = true
-  successMessage.value = null
-  errorMessage.value = null
-
-  validationState.value = {
-    evaluator: !evaluator.value,
-    evaluationDate: !evaluationDate.value,
-    sector: !sector.value,
-    responsible: !responsible.value,
-    questions: !questions.value.every(q => !!answers.value[q.id])
-  }
-
-  const formIsValid = Object.values(validationState.value).every(isInvalid => !isInvalid)
-
-  if (!formIsValid) {
-    errorMessage.value = 'Por favor, preencha todos os campos obrigatórios (incluindo todas as perguntas).'
-    isLoading.value = false
+  if (!isFormValid.value) {
+    uiStore.showToast('Preencha todos os campos obrigatórios.', 'error')
     return
   }
 
-  const evaluationData: EvaluationData = {
-    date: evaluationDate.value,
-    evaluator: evaluator.value,
-    sector_id: sector.value,
+  const payload: EvaluationFormPayload = {
+    sector_id: form.sectorId!,
+    responsible: form.responsible,
     score: totalScore.value,
-    details: { ...answers.value },
-    responsible: responsible.value,
-    observations: observations.value,
+    weight: 0, // Peso zero por padrão se não tiver balança
+    observations: JSON.stringify(answers) + '\n\n' + form.observations, // Salvando detalhes no texto por enquanto
+    image: form.image
   }
 
-  try {
-    const result = await evaluationStore.submitEvaluation(evaluationData) 
-    const successAction = evaluationStore.editingEvaluationId ? 'atualizada' : 'enviada'
-    successMessage.value = result.message || `Avaliação ${successAction} com sucesso!`
+  const success = await evaluationStore.submitEvaluation(payload)
+
+  if (success) {
+    const action = evaluationStore.editingEvaluationId ? 'atualizada' : 'registrada'
+    successMessage.value = `Avaliação ${action} com sucesso!`
+    uiStore.showToast(successMessage.value, 'success')
     resetForm()
-  } catch (error: any) {
-    errorMessage.value = error.message || 'Ocorreu um erro ao enviar.'
-    uiStore.showToast(error.message, 'error')
-  } finally {
-    isLoading.value = false
+    
+    // Remove mensagem após 3s
+    setTimeout(() => successMessage.value = null, 3000)
+  } else {
+    uiStore.showToast(evaluationStore.error || 'Erro ao salvar.', 'error')
   }
 }
 </script>
 
 <template>
-
-  <div class="flex min-h-screen flex-col items-center bg-bg-primary p-4 sm:p-8">
+  <div class="flex min-h-screen flex-col items-center bg-gray-50 p-4 sm:p-8 font-sans">
     
-    <img :src="KlinLogo" alt="Logo KLIN" class="mb-5 h-auto w-40" />
+    <img :src="KlinLogo" alt="Logo KLIN" class="mb-6 h-auto w-32 sm:w-40 drop-shadow-sm transition-transform hover:scale-105" />
 
-    <div class="w-full max-w-4xl overflow-hidden rounded-2xl border border-border-light bg-secondary shadow-lg">
+    <div class="w-full max-w-4xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
       
-      <header class="border-b border-border-light bg-secondary p-5">
-        
-        <div class="flex justify-end gap-2">
-          <ThemeToggle />
-
-          <button
-            @click="authStore.handleLogout()"
-            title="Sair do sistema"
-            class="rounded border border-danger px-3 py-2 text-xs text-danger outline-none transition-all 
-                   hover:bg-danger hover:text-white 
-                   focus-ring:ring-2 focus-ring:ring-danger/50"
-          >
-            <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair
-          </button>
-        </div>
-        
-        <div class="mt-4 text-center">
-          <div class="border-b-2 border-primary-dark pb-2 text-base font-semibold text-primary-dark">
-            SISTEMA DE GESTÃO KLIN
-          </div>
-          <div class="mt-2 border-b-2 border-primary pb-2 text-base font-semibold text-primary sm:text-lg">
-            Avaliação de Segregação de Resíduos - Braskem | Colégio Santa Amélia
+      <header class="border-b border-gray-100 bg-white p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h1 class="text-xl sm:text-2xl font-bold text-teal-700">Sistema de Gestão de Resíduos</h1>
+          <div class="flex gap-2">
+            <ThemeToggle />
+            <button
+              @click="authStore.handleLogout()"
+              class="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+            >
+              <i class="fa-solid fa-right-from-bracket"></i> Sair
+            </button>
           </div>
         </div>
+        <p class="text-sm text-gray-500 text-center uppercase tracking-wide">Avaliação de Segregação - Braskem | Colégio Santa Amélia</p>
       </header>
 
       <div class="p-6 sm:p-8">
-        <form @submit.prevent="handleSubmit">
+        <form @submit.prevent="handleSubmit" class="space-y-8">
           
-          <!-- ✅ CORREÇÃO: Adicionado 'overflow-hidden' -->
-          <table class="mb-8 w-full rounded-lg border overflow-hidden">
-            <thead>
-              <tr>
-                <th class="rounded-t-lg bg-primary-dark p-3 text-left text-white" colspan="2">
-                  Critérios de Avaliação
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border-light">
-              <tr class="bg-secondary"><td class="p-3">😐 Segregação Regular</td><td class="p-3"><strong>2 Pontos</strong></td></tr>
-              <tr class="bg-tertiary"><td class="p-3">😃 Segregação Excelente</td><td class="p-3"><strong>5 Pontos</strong></td></tr>
-            </tbody>
-          </table>
+          <div class="rounded-lg border border-gray-200 overflow-hidden">
+            <div class="bg-gray-50 p-3 text-sm font-semibold text-gray-700 border-b border-gray-200">
+              Critérios de Pontuação
+            </div>
+            <div class="grid grid-cols-2 text-sm">
+              <div class="p-3 border-r border-gray-100 flex justify-between items-center bg-yellow-50/50">
+                <span>😐 Regular</span>
+                <span class="font-bold text-yellow-700">2 pts</span>
+              </div>
+              <div class="p-3 flex justify-between items-center bg-green-50/50">
+                <span>😃 Excelente</span>
+                <span class="font-bold text-green-700">5 pts</span>
+              </div>
+            </div>
+          </div>
 
-          <div class="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label for="evaluator" class="mb-2 block text-sm font-medium text-text-secondary">Avaliador:</label>
-
+              <label class="mb-1.5 block text-sm font-medium text-gray-700">Avaliador</label>
               <input 
-                v-model="evaluator" 
+                v-model="form.evaluator" 
                 type="text" 
-                id="evaluator" 
-                required 
-                :aria-invalid="validationState.evaluator"
-                class="w-full rounded-lg border border-border-light p-3 shadow-sm outline-none transition-all 
-                       focus-ring:ring-2 focus-ring:ring-primary 
-                       invalid:border-danger"
+                required
+                class="w-full rounded-lg border border-gray-300 p-3 text-gray-900 shadow-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all"
+                placeholder="Seu nome"
               />
             </div>
             
             <div>
-              <label for="evaluation-date" class="mb-2 block text-sm font-medium text-text-secondary">Data da Avaliação:</label>
-
+              <label class="mb-1.5 block text-sm font-medium text-gray-700">Data</label>
               <input 
-                v-model="evaluationDate" 
+                v-model="form.date" 
                 type="date" 
-                id="evaluation-date" 
                 :max="today" 
-                required 
-                :aria-invalid="validationState.evaluationDate"
-                class="w-full rounded-lg border border-border-light p-3 shadow-sm outline-none transition-all 
-                       focus-ring:ring-2 focus-ring:ring-primary 
-                       invalid:border-danger" 
+                required
+                class="w-full rounded-lg border border-gray-300 p-3 text-gray-900 shadow-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all"
               />
             </div>
             
-            <div>
+            <div class="md:col-span-1">
               <ComboboxSetor 
-                v-model="sector" 
-                @update:responsible="responsible = $event"
-                :is-invalid="validationState.sector"
+                v-model="form.sectorId" 
+                @update:responsible="(name) => form.responsible = name"
               />
             </div>
             
             <div>
-              <label for="responsible" class="mb-2 block text-sm font-medium text-text-secondary">Responsável:</label>
-
+              <label class="mb-1.5 block text-sm font-medium text-gray-700">Responsável pelo Setor</label>
               <input 
-                v-model="responsible" 
+                v-model="form.responsible" 
                 type="text" 
-                id="responsible" 
-                required 
-                :aria-invalid="validationState.responsible"
-                class="w-full rounded-lg border border-border-light p-3 shadow-sm outline-none transition-all 
-                       focus-ring:ring-2 focus-ring:ring-primary 
-                       invalid:border-danger"
+                required
+                class="w-full rounded-lg border border-gray-300 p-3 text-gray-900 shadow-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all bg-gray-50"
               />
             </div>
           </div>
 
-          <h3 class="mb-6 text-center text-xl font-semibold text-text-primary">
-            AVALIAÇÃO QUALITATIVA
-          </h3>
-
-          <div 
-            class="mb-8 w-full overflow-x-auto rounded-lg border transition-colors"
-            :class="{ 'border-danger': validationState.questions }"
-          >
-
-            <table class="min-w-full divide-y divide-border-light">
-              <thead class="bg-primary-dark">
-                <tr>
-                  <th class="p-4 text-left text-sm font-semibold text-white">Item de Avaliação</th>
-                  <th class="p-4 text-center text-lg font-semibold text-white">😐</th>
-                  <th class="p-4 text-center text-lg font-semibold text-white">😃</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-border-light bg-secondary">
-                
-                <tr 
-                  v-for="(question, index) in questions" 
-                  :key="question.id"
-                  role="radiogroup"
-                  :aria-labelledby="`q-label-${index}`"
-                  class="hover:bg-tertiary"
-                >
-                  <td :id="`q-label-${index}`" class="p-4 font-medium text-text-primary">{{ question.text }}</td>
-                  
-                  <td class="p-4 text-center">
-                    <label :for="`${question.id}-2`" class="cursor-pointer">
-                      <input 
-                        type="radio" 
-                        :id="`${question.id}-2`"
-                        :name="question.id" 
-                        value="2" 
-                        v-model="answers[question.id]" 
-                        class="h-5 w-5 text-primary outline-none focus-ring:ring-2 focus-ring:ring-primary"
-                        required
-                      />
-                    </label>
-                  </td>
-                  
-                  <td class="p-4 text-center">
-                    <label :for="`${question.id}-5`" class="cursor-pointer">
-                      <input 
-                        type="radio" 
-                        :id="`${question.id}-5`"
-                        :name="question.id" 
-                        value="5" 
-                        v-model="answers[question.id]"
-                        class="h-5 w-5 text-primary outline-none focus-ring:ring-2 focus-ring:ring-primary"
-                      />
-                    </label>
-                  </td>
-                </tr>
-
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="my-6 rounded-lg border-2 border-primary bg-tertiary p-5 text-center text-2xl font-bold text-primary-dark">
-            Pontuação Total: <span class="text-primary">{{ totalScore }}</span>
+          <div>
+            <h3 class="mb-4 text-lg font-bold text-gray-800 border-l-4 border-teal-500 pl-3">Itens de Avaliação</h3>
+            
+            <div class="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Avaliação</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  <tr v-for="q in questions" :key="q.id" class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4 text-sm text-gray-900 font-medium">{{ q.text }}</td>
+                    <td class="px-6 py-4">
+                      <div class="flex justify-center gap-4">
+                        <label class="cursor-pointer group flex flex-col items-center">
+                          <input type="radio" :name="q.id" value="2" v-model="answers[q.id]" class="sr-only peer" required>
+                          <span class="text-2xl grayscale opacity-50 peer-checked:grayscale-0 peer-checked:opacity-100 peer-checked:scale-125 transition-all">😐</span>
+                        </label>
+                        <label class="cursor-pointer group flex flex-col items-center">
+                          <input type="radio" :name="q.id" value="5" v-model="answers[q.id]" class="sr-only peer" required>
+                          <span class="text-2xl grayscale opacity-50 peer-checked:grayscale-0 peer-checked:opacity-100 peer-checked:scale-125 transition-all">😃</span>
+                        </label>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div class="mb-8">
-            <label for="observations" class="mb-2 block text-sm font-medium text-text-secondary">Observações:</label>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+             <div>
+              <label class="mb-1.5 block text-sm font-medium text-gray-700">Evidência Fotográfica (Opcional)</label>
+              <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-teal-500 transition-colors bg-gray-50">
+                <div class="space-y-1 text-center">
+                  <div v-if="!imagePreview">
+                    <i class="fa-solid fa-camera text-gray-400 text-3xl mb-3"></i>
+                    <div class="flex text-sm text-gray-600 justify-center">
+                      <label for="file-upload" class="relative cursor-pointer rounded-md font-medium text-teal-600 hover:text-teal-500 focus-within:outline-none">
+                        <span>Carregar uma foto</span>
+                        <input id="file-upload" name="file-upload" type="file" class="sr-only" accept="image/*" @change="handleImageUpload">
+                      </label>
+                    </div>
+                  </div>
+                  <div v-else class="relative">
+                    <img :src="imagePreview" class="max-h-40 rounded shadow-sm mx-auto" />
+                    <button type="button" @click="imagePreview = null; form.image = null" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs shadow-md">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
+            <div class="bg-teal-50 rounded-xl p-6 border border-teal-100 flex flex-col items-center justify-center h-full">
+              <span class="text-sm font-semibold text-teal-800 uppercase tracking-wider mb-2">Pontuação Atingida</span>
+              <div class="text-5xl font-extrabold text-teal-600">{{ totalScore }}</div>
+              <span class="text-xs text-teal-600/70 mt-1">de 20 pontos possíveis</span>
+            </div>
+          </div>
+
+          <div>
+            <label for="observations" class="mb-1.5 block text-sm font-medium text-gray-700">Observações Gerais</label>
             <textarea 
-              v-model="observations" 
+              v-model="form.observations" 
               id="observations" 
-              rows="4" 
-              class="w-full rounded-lg border border-border-light p-3 shadow-sm outline-none transition-all 
-                     focus-ring:ring-2 focus-ring:ring-primary"
+              rows="3" 
+              class="w-full rounded-lg border border-gray-300 p-3 text-gray-900 shadow-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all resize-none"
+              placeholder="Algum comentário adicional sobre a coleta ou segregação..."
             ></textarea>
           </div>
 
-          <div v-if="successMessage" role="status" class="mb-4 rounded-md bg-success/10 p-4 text-center text-success">
-            {{ successMessage }}
+          <div v-if="successMessage" class="p-4 rounded-lg bg-green-50 text-green-700 border border-green-200 flex items-center gap-3">
+            <i class="fa-solid fa-check-circle"></i> {{ successMessage }}
           </div>
-          <div v-if="errorMessage" role="alert" class="mb-4 rounded-md bg-danger/10 p-4 text-center text-danger">
-            {{ errorMessage }}
+          <div v-if="evaluationStore.error" class="p-4 rounded-lg bg-red-50 text-red-700 border border-red-200 flex items-center gap-3">
+            <i class="fa-solid fa-triangle-exclamation"></i> {{ evaluationStore.error }}
           </div>
 
-          <div class="flex flex-col gap-4 sm:flex-row">
-
-            <button
-              type="button"
-              @click="resetForm"
-              class="flex-1 rounded-lg bg-gray-500 px-6 py-4 text-lg font-semibold text-white shadow-md outline-none transition-all 
-                     hover:bg-gray-600 
-                     focus-ring:ring-2 focus-ring:ring-gray-400"
+          <div class="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-100">
+            <button 
+              type="button" 
+              @click="resetForm" 
+              class="flex-1 px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-gray-200 transition-all flex justify-center items-center gap-2"
+              :disabled="evaluationStore.loading"
             >
-              <i :class="evaluationStore.editingEvaluationId ? 'fa-solid fa-times' : 'fa-solid fa-eraser'" class="mr-2"></i>
-              {{ evaluationStore.editingEvaluationId ? 'Cancelar Edição' : 'Limpar' }}
+              <i class="fa-solid fa-eraser"></i>
+              {{ evaluationStore.editingEvaluationId ? 'Cancelar' : 'Limpar' }}
             </button>
             
-            <button
-              type="submit"
-              :disabled="isLoading"
-              class="flex-1 rounded-lg px-6 py-4 text-lg font-semibold text-white shadow-md outline-none transition-all 
-                     disabled:opacity-50"
-              :class="evaluationStore.editingEvaluationId 
-                ? 'bg-warning hover:bg-warning/90 focus-ring:ring-2 focus-ring:ring-warning/50' 
-                : 'bg-success hover:bg-success/90 focus-ring:ring-2 focus-ring:ring-success/50'"
+            <button 
+              type="submit" 
+              class="flex-[2] px-6 py-3 bg-teal-600 text-white font-bold rounded-lg shadow-md hover:bg-teal-700 focus:ring-4 focus:ring-teal-500/30 disabled:opacity-70 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
+              :disabled="evaluationStore.loading"
             >
-              <i v-if="isLoading" class="fa-solid fa-spinner fa-spin mr-2"></i>
-              <i v-else :class="evaluationStore.editingEvaluationId ? 'fa-solid fa-floppy-disk' : 'fa-solid fa-paper-plane'" class="mr-2"></i>
-              {{ isLoading ? 'Salvando...' : (evaluationStore.editingEvaluationId ? 'Atualizar Avaliação' : 'Enviar Avaliação') }}
+              <span v-if="evaluationStore.loading" class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></span>
+              <i v-else :class="evaluationStore.editingEvaluationId ? 'fa-solid fa-floppy-disk' : 'fa-solid fa-paper-plane'"></i>
+              
+              {{ evaluationStore.loading ? 'Processando...' : (evaluationStore.editingEvaluationId ? 'Salvar Alterações' : 'Enviar Avaliação') }}
             </button>
           </div>
+
         </form>
       </div>
     </div>
 
-    <div class="mt-6 flex w-full max-w-4xl flex-col gap-4 sm:flex-row">
-      <button 
-        @click="uiStore.openModal('ranking')"
-        class="flex-1 rounded-lg bg-primary px-6 py-4 text-lg font-semibold text-white shadow-md outline-none transition-all 
-               hover:bg-primary-dark 
-               focus-ring:ring-2 focus-ring:ring-primary/50"
-      >
-        Ver Ranking <i class="fa-solid fa-trophy ml-2"></i>
+    <div class="mt-8 grid w-full max-w-4xl grid-cols-1 sm:grid-cols-3 gap-4">
+      <button @click="uiStore.openModal('ranking')" class="group p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left">
+        <div class="flex items-center gap-3 mb-1">
+          <div class="w-8 h-8 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center"><i class="fa-solid fa-trophy"></i></div>
+          <span class="font-bold text-gray-700 group-hover:text-teal-700">Ranking</span>
+        </div>
+        <p class="text-xs text-gray-500">Visualize as melhores áreas</p>
       </button>
-      <button 
-        @click="uiStore.openModal('dashboard')"
-        class="flex-1 rounded-lg bg-gray-800 px-6 py-4 text-lg font-semibold text-white shadow-md outline-none transition-all 
-               hover:bg-gray-900 
-               focus-ring:ring-2 focus-ring:ring-gray-500"
-      >
-        Ver Dashboard <i class="fa-solid fa-chart-line ml-2"></i>
+
+      <button @click="uiStore.openModal('dashboard')" class="group p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-500 transition-all text-left">
+        <div class="flex items-center gap-3 mb-1">
+          <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-chart-pie"></i></div>
+          <span class="font-bold text-gray-700 group-hover:text-blue-700">Dashboard</span>
+        </div>
+        <p class="text-xs text-gray-500">Métricas e gráficos gerais</p>
       </button>
-      
-      <button 
-        v-if="authStore.userRole === 'admin'"
-        @click="uiStore.openModal('admin')"
-        class="flex-1 rounded-lg bg-danger px-6 py-4 text-lg font-semibold text-white shadow-md outline-none transition-all 
-               hover:bg-danger/90 
-               focus-ring:ring-2 focus-ring:ring-danger/50"
-      >
-        Ações de Admin <i class="fa-solid fa-user-shield ml-2"></i>
+
+      <button v-if="authStore.userRole === 'admin'" @click="uiStore.openModal('admin')" class="group p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-purple-500 transition-all text-left">
+        <div class="flex items-center gap-3 mb-1">
+          <div class="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center"><i class="fa-solid fa-cog"></i></div>
+          <span class="font-bold text-gray-700 group-hover:text-purple-700">Administração</span>
+        </div>
+        <p class="text-xs text-gray-500">Gestão do sistema</p>
       </button>
     </div>
 

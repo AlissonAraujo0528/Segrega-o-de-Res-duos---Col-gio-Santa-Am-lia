@@ -1,17 +1,14 @@
-// src/lib/supabaseClient.ts
-
 import { createClient } from '@supabase/supabase-js'
 
-// 1. Lê as chaves do arquivo .env
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// 2. Validação (COMENTE OU REMOVA ESTAS LINHAS TEMPORARIAMENTE)
-/*
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error("Supabase URL ou Key não encontradas no .env");
+// Validação crítica de segurança e configuração
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Erro Crítico: Variáveis de ambiente do Supabase ausentes.')
+  console.error('Verifique se o arquivo .env existe e contém VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY')
+  throw new Error('Configuração do Supabase inválida. Veja o console para detalhes.')
 }
-*/
 
-// 3. Cria e exporta o client
-export const supabaseClient = createClient(supabaseUrl, supabaseKey)
+// Singleton do cliente
+export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey)

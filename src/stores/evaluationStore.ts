@@ -1,116 +1,205 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
-// import { useAuthStore } from './authStore' // <-- *** CORREÇÃO: REMOVIDO DAQUI ***
 
-// Tipos de dados
-interface Sector {
-  id: string
-  name: string
-  default_responsible: string
+// --- Tipos (Alinhados com o Banco de Dados) ---
+
+export interface Sector {
+  id: number // bigint do banco
+  name: string // mapeado da coluna 'nome'
+  default_responsible?: string | null
 }
 
-export interface EvaluationFull {
-  id: string
-  date: string
-  evaluator: string
-  sector_id: string
-  score: number
-  details: { [key: string]: string | number } | null // Corrigido para aceitar null
+// Dados para envio do formulário
+export interface EvaluationFormPayload {
+  sector_id: number
   responsible: string
-  observations: string
+  score: number // nota (0-5)
+  weight: number // peso
+  observations?: string
+  image?: File | null // Arquivo para upload
 }
 
-export interface EvaluationData {
-  date: string
-  evaluator: string
-  sector_id: string
-  score: number
-  details: { [key: string]: string | number }
-  responsible: string
-  observations: string
+// Dados completos vindos do banco
+export interface EvaluationFull extends EvaluationFormPayload {
+  id: string
+  user_id: string
+  photo_url: string | null
+  created_at: string
 }
-
-const EDGE_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-evaluation`
 
 export const useEvaluationStore = defineStore('evaluation', () => {
   // --- STATE ---
-  const sectorsList = ref<Sector[]>([])
-  const isLoadingSectors = ref(false)
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+  
+  // Controle de Edição
   const editingEvaluationId = ref<string | null>(null)
   const dataToEdit = ref<EvaluationFull | null>(null)
 
   // --- ACTIONS ---
-  async function loadSectors() {
-    if (sectorsList.value.length > 0) return
-    isLoadingSectors.value = true
-    try {
-      const { data, error } = await supabaseClient
-        .from('sectors')
-        .select('id, name, default_responsible')
 
-      if (error) throw error
-      data.sort((a, b) => {
-        return a.name.localeCompare(b.name, undefined, { numeric: true })
-      })
-      sectorsList.value = data
-    } catch (error) {
-      console.error('Erro ao carregar setores:', error)
-    } finally {
-      isLoadingSectors.value = false
-    }
-  }
-
-  // NOVO: Busca setores com base em um texto (para o combobox)
+  /**
+   * Busca setores pelo nome (usado no Combobox)
+   * Mapeia 'nome' (banco) para 'name' (frontend)
+   */
   async function searchSectors(query: string): Promise<Sector[]> {
     try {
-      const { data, error } = await supabaseClient
-        .from('sectors')
-        .select('id, name, default_responsible')
-        .ilike('name', `%${query}%`) // Busca com "ilike" (case-insensitive)
-        .limit(10) // Limita a 10 resultados
+      const { data, error: err } = await supabaseClient
+        .from('setores')
+        .select('id, name:nome, default_responsible') // Alias nome -> name
+        .ilike('nome', `%${query}%`)
+        .eq('ativo', true)
+        .limit(10)
+        .order('nome')
 
-      if (error) throw error
-      return data || []
-    } catch (error) {
-      console.error('Erro ao buscar setores:', error)
+      if (err) throw err
+      return (data as any[]) || []
+    } catch (err: any) {
+      console.error('Erro ao buscar setores:', err)
       return []
     }
   }
-  
-  // NOVO: Busca um único setor pelo ID (para o modo de edição)
-  async function getSectorById(id: string): Promise<Sector | null> {
+
+  /**
+   * Busca um setor pelo ID para pré-preencher em edições
+   */
+  async function getSectorById(id: string | number): Promise<Sector | null> {
     try {
-      const { data, error } = await supabaseClient
-        .from('sectors')
-        .select('id, name, default_responsible')
+      const { data, error: err } = await supabaseClient
+        .from('setores')
+        .select('id, name:nome, default_responsible')
         .eq('id', id)
         .single()
-      
-      if (error) throw error
-      return data
-    } catch (error) {
-      console.error('Erro ao buscar setor por ID:', error)
+
+      if (err) throw err
+      return data as any
+    } catch (err) {
+      // Erro silencioso (comum se ID for nulo)
       return null
     }
   }
 
-  async function fetchEvaluationForEdit(id: string) {
+  /**
+   * Envia ou Atualiza uma avaliação (Com Upload de Imagem)
+   */
+  async function submitEvaluation(payload: EvaluationFormPayload) {
+    loading.value = true
+    error.value = null
+    
     try {
-      const { data, error } = await supabaseClient
-        .from('evaluations')
-        .select('id, date, evaluator, sector_id, score, details, responsible, observations')
+      // 1. Verificar Sessão DIRETAMENTE no Supabase (Resolve o erro 2339)
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+      
+      if (authError || !user) {
+        throw new Error('Sessão expirada. Por favor, faça login novamente.')
+      }
+
+      let photoUrl = null
+
+      // 2. Upload da Imagem (se houver)
+      if (payload.image) {
+        const fileExt = payload.image.name.split('.').pop()
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`
+        
+        const { error: uploadError } = await supabaseClient.storage
+          .from('evaluations')
+          .upload(fileName, payload.image)
+
+        if (uploadError) throw uploadError
+
+        // Pegar URL pública
+        const { data: publicData } = supabaseClient.storage
+          .from('evaluations')
+          .getPublicUrl(fileName)
+          
+        photoUrl = publicData.publicUrl
+      }
+
+      // 3. Montar objeto para salvar
+      const dbData = {
+        user_id: user.id,
+        setor_id: payload.sector_id,
+        responsible_name: payload.responsible,
+        nota: payload.score,
+        peso: payload.weight,
+        observacao: payload.observations,
+        ...(photoUrl ? { foto_url: photoUrl } : {}) 
+      }
+      
+      // Resolve o erro 6133 (removemos a variável 'result' não usada)
+      if (editingEvaluationId.value) {
+        // --- ATUALIZAÇÃO (UPDATE) ---
+        const { error: updateError } = await supabaseClient
+          .from('avaliacoes')
+          .update(dbData)
+          .eq('id', editingEvaluationId.value)
+          
+        if (updateError) throw updateError
+      } else {
+        // --- CRIAÇÃO (INSERT) ---
+        const { error: insertError } = await supabaseClient
+          .from('avaliacoes')
+          .insert(dbData)
+
+        if (insertError) throw insertError
+      }
+
+      clearEditMode()
+      return true
+
+    } catch (e: any) {
+      console.error('Erro ao enviar avaliação:', e)
+      error.value = e.message || 'Falha ao salvar avaliação.'
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Prepara o store para editar um item existente
+   */
+  async function fetchEvaluationForEdit(id: string) {
+    loading.value = true
+    try {
+      const { data, error: err } = await supabaseClient
+        .from('avaliacoes')
+        .select(`
+          id, 
+          created_at,
+          setor_id,
+          responsible_name,
+          nota,
+          peso,
+          observacao,
+          foto_url,
+          user_id
+        `)
         .eq('id', id)
         .single()
-      
-      if (error) throw error
-      
-      dataToEdit.value = data as EvaluationFull
+
+      if (err) throw err
+
+      dataToEdit.value = {
+        id: data.id,
+        created_at: data.created_at,
+        sector_id: data.setor_id,
+        responsible: data.responsible_name,
+        score: data.nota,
+        weight: data.peso,
+        observations: data.observacao,
+        photo_url: data.foto_url,
+        user_id: data.user_id
+      } as unknown as EvaluationFull
+
       editingEvaluationId.value = id
-      
-    } catch (error) {
-      console.error("Erro ao carregar avaliação para edição:", error)
+
+    } catch (err) {
+      console.error('Erro ao buscar avaliação:', err)
       clearEditMode()
+    } finally {
+      loading.value = false
     }
   }
 
@@ -119,81 +208,38 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     dataToEdit.value = null
   }
 
-  async function submitEvaluation(
-    evaluationData: EvaluationData,
-  ) {
-    // *** CORREÇÃO: Import dinâmico ***
-    const { useAuthStore } = await import('./authStore')
-    const authStore = useAuthStore()
-    
-    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession()
-    if (sessionError || !session) {
-      authStore.handleLogout()
-      throw new Error('Sessão expirada. Faça login novamente.')
-    }
-
-    const isUpdate = !!editingEvaluationId.value
-    
-    const response = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        evaluationData: evaluationData,
-        isUpdate: isUpdate,
-        evaluationId: editingEvaluationId.value
-      })
-    })
-
-    const result = await response.json()
-    if (!response.ok) throw new Error(result.error || 'Erro desconhecido.')
-
-    clearEditMode()
-    return result
-  }
-
+  /**
+   * Exclusão Lógica
+   */
   async function deleteEvaluation(id: string) {
+    loading.value = true
     try {
-      const { error } = await supabaseClient
-        .from('evaluations')
-        .update({ deleted_at: new Date().toISOString() })
+      const { error: err } = await supabaseClient
+        .from('avaliacoes')
+        .delete()
         .eq('id', id)
-      
-      if (error) throw error
-      
-    } catch (error) {
-      console.error('Erro ao mover para lixeira:', error)
-      throw new Error('Não foi possível excluir o registro.')
+
+      if (err) throw err
+      return true
+    } catch (err: any) {
+      console.error('Erro ao excluir:', err)
+      error.value = err.message
+      return false
+    } finally {
+      loading.value = false
     }
   }
-
-  async function deleteAllEvaluations() {
-  // A RPC no Supabase já tem a verificação de 'admin',
-  // então esta chamada falhará com segurança se um não-admin tentar.
-  try {
-    const { error } = await supabaseClient.rpc('delete_all_evaluations')
-    if (error) throw error
-  } catch (error: any) {
-    console.error('Erro ao limpar avaliações:', error)
-    // Retorna a mensagem de erro da RPC (ex: "Acesso negado")
-    throw new Error(error.message || 'Falha ao executar a ação de admin.')
-  }
-}
 
   return {
-    sectorsList,
-    isLoadingSectors,
+    loading,
+    error,
     editingEvaluationId,
     dataToEdit,
-    loadSectors,
-    fetchEvaluationForEdit,
-    clearEditMode,
-    submitEvaluation,
-    deleteEvaluation,
     searchSectors,
     getSectorById,
-    deleteAllEvaluations,
+    submitEvaluation,
+    fetchEvaluationForEdit,
+    clearEditMode,
+    deleteEvaluation
   }
 })
