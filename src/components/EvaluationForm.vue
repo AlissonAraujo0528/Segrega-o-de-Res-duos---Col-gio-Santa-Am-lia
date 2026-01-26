@@ -15,7 +15,8 @@ const uiStore = useUiStore()
 const form = reactive({
   evaluator: '',
   date: new Date().toISOString().split('T')[0],
-  sectorId: null as number | null,
+  // CORREÇÃO: O ID do setor agora é uma string (UUID) vinda do banco
+  sectorId: null as string | null,
   responsible: '',
   observations: '',
   image: null as File | null
@@ -57,15 +58,13 @@ watch(() => evaluationStore.dataToEdit, (newData) => {
     form.evaluator = newData.evaluator || ''
     form.date = newData.date || new Date().toISOString().split('T')[0]
     
+    // CORREÇÃO: Atribuição direta (agora ambos são strings/UUIDs)
     form.sectorId = newData.sector_id
     form.responsible = newData.responsible
     form.observations = newData.observations || ''
     
     // Resetar respostas antigas
     Object.keys(answers).forEach(k => delete answers[k])
-    
-    // Se você tiver lógica para recuperar as respostas do JSON no futuro, seria aqui.
-    // Por enquanto, na edição, as respostas das perguntas virão vazias para reavaliação.
   }
 })
 
@@ -106,6 +105,7 @@ async function handleSubmit() {
   }
 
   const payload: EvaluationFormPayload = {
+    // CORREÇÃO: O type assertion (!) agora é seguro pois a interface espera string (UUID)
     sector_id: form.sectorId!,
     responsible: form.responsible,
     score: totalScore.value,

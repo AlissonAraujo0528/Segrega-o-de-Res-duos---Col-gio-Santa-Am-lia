@@ -12,6 +12,7 @@ import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid'
 import { useEvaluationStore, type Sector } from '../stores/evaluationStore'
 
 const props = defineProps<{
+  // Aceita string (UUID) ou number (legado)
   modelValue: string | number | null
   isInvalid?: boolean
 }>()
@@ -27,7 +28,6 @@ const selectedSector = ref<Sector | null>(null)
 const filteredSectors = ref<Sector[]>([])
 const loading = ref(false)
 
-// Controle de debounce para não sobrecarregar a busca
 let debounceTimeout: ReturnType<typeof setTimeout>
 
 const onQueryChange = (event: Event) => {
@@ -37,7 +37,6 @@ const onQueryChange = (event: Event) => {
 
   clearTimeout(debounceTimeout)
   
-  // Aguarda 300ms antes de buscar
   debounceTimeout = setTimeout(async () => {
     if (val.trim().length >= 1) {
       try {
@@ -53,24 +52,22 @@ const onQueryChange = (event: Event) => {
   }, 300)
 }
 
-// Quando o usuário seleciona um setor na lista
 watch(selectedSector, (newSector) => {
   if (newSector) {
     emit('update:modelValue', newSector.id)
-    // Preenche o responsável automaticamente se existir
     if (newSector.default_responsible) {
       emit('update:responsible', newSector.default_responsible)
     }
   }
 })
 
-// Sincronização inicial e externa (ex: ao carregar uma avaliação existente)
 watch(() => props.modelValue, async (newId) => {
   if (newId) {
-    // Se o setor selecionado já estiver carregado, não busca dnv
+    // Se já estiver selecionado, evita re-buscar
+    // Verifica tanto como string quanto como number/original para garantir
     if (selectedSector.value?.id === newId) return
+    if (selectedSector.value?.id === newId.toString()) return
 
-    // Se não, busca os dados completos desse ID para mostrar o nome
     const sector = await store.getSectorById(newId.toString())
     if (sector) {
       selectedSector.value = sector
@@ -81,7 +78,6 @@ watch(() => props.modelValue, async (newId) => {
   }
 }, { immediate: true })
 
-// Função auxiliar para exibir o nome no input
 const displayValue = (item: unknown) => {
   return (item as Sector)?.name ?? ''
 }
@@ -91,9 +87,7 @@ const displayValue = (item: unknown) => {
   <div class="w-full">
     <Combobox v-model="selectedSector" nullable>
       <div class="relative mt-1">
-        <label
-          class="mb-2 block text-sm font-medium text-gray-700"
-        >
+        <label class="mb-2 block text-sm font-medium text-gray-700">
           Setor / Sala:
         </label>
         
