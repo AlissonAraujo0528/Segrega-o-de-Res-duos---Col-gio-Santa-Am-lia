@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 // --- Tipos ---
-export type ModalName = 'none' | 'ranking' | 'dashboard' | 'admin'
+// Adicionado 'auth' e alterado para aceitar null
+export type ModalName = 'auth' | 'ranking' | 'dashboard' | 'admin' | null
 export type ThemeName = 'light' | 'dark' | 'system'
 export type AuthModalMode = 'login' | 'register' | 'update_password'
 
@@ -22,19 +23,41 @@ interface ConfirmOptions {
 
 export const useUiStore = defineStore('ui', () => {
   // --- STATE ---
-  const activeModal = ref<ModalName>('none')
+  const activeModal = ref<ModalName>(null)
+  const authModalMode = ref<AuthModalMode>('login')
+  const theme = ref<ThemeName>('system')
+
+  // Notificações e Confirmação (Mantido do seu código original)
   const notifications = ref<Notification[]>([])
   const isConfirmModalOpen = ref(false)
   const confirmOptions = ref<ConfirmOptions | null>(null)
-  const theme = ref<ThemeName>('system')
-
-  // --- NOVOS ESTADOS PARA CORREÇÃO DOS BUGS DE SENHA ---
   const isRecoveryMode = ref(false)
-  const authModalMode = ref<AuthModalMode>('login')
-  // ----------------------------------------------------
 
   // --- ACTIONS ---
+
+  function openModal(name: ModalName) {
+    activeModal.value = name
+    document.body.style.overflow = 'hidden'
+  }
+
+  function closeModal() {
+    activeModal.value = null
+    // Só libera o scroll se não houver um modal de confirmação por cima
+    if (!isConfirmModalOpen.value) {
+      document.body.style.overflow = ''
+    }
+  }
+
+  // --- Helpers Específicos (CORREÇÃO DE ERROS DE BUILD) ---
+  // Estes métodos conectam os componentes específicos às ações genéricas
+  const closeAuthModal = () => closeModal()
+  const closeDashboardModal = () => closeModal()
   
+  // Getters como funções para reatividade
+  const isAuthModalOpen = () => activeModal.value === 'auth'
+  const isDashboardModalOpen = () => activeModal.value === 'dashboard'
+
+  // --- Tema ---
   function applyTheme(newTheme: ThemeName) {
     if (newTheme === 'system') {
       localStorage.removeItem('theme')
@@ -54,20 +77,12 @@ export const useUiStore = defineStore('ui', () => {
     theme.value = newTheme
   }
 
-  // --- Ações de Modal ---
-  function openModal(name: ModalName) {
-    activeModal.value = name
-    document.body.style.overflow = 'hidden' 
+  function toggleTheme() {
+    const next = theme.value === 'dark' ? 'light' : 'dark' // Simples toggle, ignora system para forçar a troca
+    applyTheme(next)
   }
 
-  function closeModal() {
-    activeModal.value = 'none'
-    if (!isConfirmModalOpen.value) {
-      document.body.style.overflow = ''
-    }
-  }
-
-  // --- Ações de Toast/Notificação ---
+  // --- Notificações ---
   function removeNotification(id: number) {
     notifications.value = notifications.value.filter(n => n.id !== id)
   }
@@ -84,7 +99,7 @@ export const useUiStore = defineStore('ui', () => {
     }, duration)
   }
 
-  // --- Ações do Modal de Confirmação ---
+  // --- Confirmação ---
   function showConfirmModal(options: ConfirmOptions) {
     confirmOptions.value = {
       ...options,
@@ -98,7 +113,8 @@ export const useUiStore = defineStore('ui', () => {
   function closeConfirmModal() {
     isConfirmModalOpen.value = false
     confirmOptions.value = null
-    if (activeModal.value === 'none') {
+    // Se não tiver modal de fundo, libera scroll
+    if (activeModal.value === null) {
       document.body.style.overflow = ''
     }
   }
@@ -111,21 +127,29 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
+    // State
     activeModal,
+    authModalMode,
+    theme,
     notifications,
     isConfirmModalOpen,
     confirmOptions,
-    theme,
     isRecoveryMode,
-    authModalMode,
     
+    // Actions & Helpers
     openModal,
     closeModal,
+    isAuthModalOpen,      // Novo
+    closeAuthModal,       // Novo
+    isDashboardModalOpen, // Novo
+    closeDashboardModal,  // Novo
+    
+    applyTheme,
+    toggleTheme,
     showToast,
     removeNotification,
     showConfirmModal,
     closeConfirmModal,
-    executeConfirm,
-    applyTheme,
+    executeConfirm
   }
 })

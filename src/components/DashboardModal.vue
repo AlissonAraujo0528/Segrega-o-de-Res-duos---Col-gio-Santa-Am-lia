@@ -27,7 +27,8 @@ const activeTab = ref<'overview' | 'history'>('overview')
 
 onMounted(async () => {
   await dashboardStore.fetchAvailablePeriods()
-  if (dashboardStore.availablePeriods.length > 0) {
+  // Verificação de segurança para array vazio
+  if (dashboardStore.availablePeriods.length > 0 && dashboardStore.availablePeriods[0]) {
     selectedPeriod.value = dashboardStore.availablePeriods[0].id
   }
 })
@@ -35,11 +36,18 @@ onMounted(async () => {
 // Busca dados quando muda o período ou a aba
 watch([selectedPeriod, activeTab], async ([newPeriod, newTab]) => {
   if (newPeriod) {
-    const [year, month] = newPeriod.split('-').map(Number)
-    if (newTab === 'overview') {
-      await dashboardStore.fetchDashboardData(month, year)
-    } else {
-      await dashboardStore.fetchRecentHistory(month, year)
+    const parts = newPeriod.split('-')
+    if (parts.length === 2) {
+        const year = Number(parts[0])
+        const month = Number(parts[1])
+        
+        if (!isNaN(year) && !isNaN(month)) {
+            if (newTab === 'overview') {
+                await dashboardStore.fetchDashboardData(month, year)
+            } else {
+                await dashboardStore.fetchRecentHistory(month, year)
+            }
+        }
     }
   }
 })
@@ -96,8 +104,8 @@ const scoreColor = computed(() => {
   return 'text-red-600'
 })
 
-// Formatação de data simples
-const formatDate = (dateStr: string) => {
+// Formatação de data simples com tipagem segura
+const formatDate = (dateStr?: string) => {
   if (!dateStr) return '-'
   return new Date(dateStr).toLocaleDateString('pt-BR', { 
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
@@ -106,9 +114,9 @@ const formatDate = (dateStr: string) => {
 </script>
 
 <template>
-  <BaseModal class="w-full max-w-6xl" v-slot="{ titleId }">
+  <BaseModal class="w-full max-w-6xl" :isOpen="uiStore.isDashboardModalOpen()" @close="uiStore.closeDashboardModal">
     
-    <ModalHeader :titleId="titleId">
+    <ModalHeader :titleId="'dash-header'">
       <div class="flex flex-col sm:flex-row justify-between items-center w-full pr-8">
         <div class="flex items-center gap-3">
           <i class="fa-solid fa-chart-line text-teal-600"></i>

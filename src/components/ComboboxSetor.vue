@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import {
   Combobox,
   ComboboxInput,
@@ -9,14 +9,7 @@ import {
   TransitionRoot
 } from '@headlessui/vue'
 import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid'
-import { useEvaluationStore } from '../stores/evaluationStore'
-
-// Definição da interface compatível com o Store
-interface Sector {
-  id: string | number
-  name: string
-  default_responsible?: string | null
-}
+import { useEvaluationStore, type Sector } from '../stores/evaluationStore'
 
 const props = defineProps<{
   modelValue: string | number | null
@@ -68,9 +61,6 @@ watch(selectedSector, (newSector) => {
     if (newSector.default_responsible) {
       emit('update:responsible', newSector.default_responsible)
     }
-  } else {
-    // Se limpar a seleção (pode ocorrer se a prop modelValue vier nula externamente)
-    // Mas o Combobox do Headless UI geralmente mantém o valor.
   }
 })
 

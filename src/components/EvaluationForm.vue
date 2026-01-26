@@ -53,8 +53,10 @@ const today = new Date().toISOString().split('T')[0]
 // Preencher formulário ao editar
 watch(() => evaluationStore.dataToEdit, (newData) => {
   if (newData) {
-    form.evaluator = newData.evaluator
-    form.date = newData.date // Data já vem formatada do banco ou precisa ajustar?
+    // Correção TS: Usar fallback para string vazia se a propriedade for undefined
+    form.evaluator = newData.evaluator || ''
+    form.date = newData.date || new Date().toISOString().split('T')[0]
+    
     form.sectorId = newData.sector_id
     form.responsible = newData.responsible
     form.observations = newData.observations || ''
@@ -62,11 +64,8 @@ watch(() => evaluationStore.dataToEdit, (newData) => {
     // Resetar respostas antigas
     Object.keys(answers).forEach(k => delete answers[k])
     
-    // Preencher novas (se o banco salvar JSON em 'details', ajuste aqui. 
-    // Como simplificamos para nota única no banco, talvez você queira salvar o JSON em 'observacao' ou uma coluna extra 'details')
-    // Assumindo que a nota total é o que importa para o banco agora:
-    // Se precisar reconstruir as respostas individuais a partir da nota total, é complexo. 
-    // Sugestão: Apenas exiba a nota total na edição ou adicione coluna JSONB 'details' no banco.
+    // Se você tiver lógica para recuperar as respostas do JSON no futuro, seria aqui.
+    // Por enquanto, na edição, as respostas das perguntas virão vazias para reavaliação.
   }
 })
 
@@ -111,7 +110,7 @@ async function handleSubmit() {
     responsible: form.responsible,
     score: totalScore.value,
     weight: 0, // Peso zero por padrão se não tiver balança
-    observations: JSON.stringify(answers) + '\n\n' + form.observations, // Salvando detalhes no texto por enquanto
+    observations: JSON.stringify(answers) + '\n\n' + form.observations, // Salvando detalhes no texto
     image: form.image
   }
 

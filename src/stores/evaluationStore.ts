@@ -20,12 +20,15 @@ export interface EvaluationFormPayload {
   image?: File | null // Arquivo para upload
 }
 
-// Dados completos vindos do banco
+// Dados completos vindos do banco + campos auxiliares para o front
 export interface EvaluationFull extends EvaluationFormPayload {
   id: string
   user_id: string
   photo_url: string | null
   created_at: string
+  // Campos opcionais para compatibilidade com o formulário de edição
+  evaluator?: string 
+  date?: string
 }
 
 export const useEvaluationStore = defineStore('evaluation', () => {
@@ -88,7 +91,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     error.value = null
     
     try {
-      // 1. Verificar Sessão DIRETAMENTE no Supabase (Resolve o erro 2339)
+      // 1. Verificar Sessão DIRETAMENTE no Supabase
       const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
       
       if (authError || !user) {
@@ -127,7 +130,6 @@ export const useEvaluationStore = defineStore('evaluation', () => {
         ...(photoUrl ? { foto_url: photoUrl } : {}) 
       }
       
-      // Resolve o erro 6133 (removemos a variável 'result' não usada)
       if (editingEvaluationId.value) {
         // --- ATUALIZAÇÃO (UPDATE) ---
         const { error: updateError } = await supabaseClient
@@ -181,9 +183,14 @@ export const useEvaluationStore = defineStore('evaluation', () => {
 
       if (err) throw err
 
+      // Mapeia para o formato esperado pelo form
       dataToEdit.value = {
         id: data.id,
         created_at: data.created_at,
+        // Preenche campos auxiliares para o formulário não falhar
+        date: data.created_at ? data.created_at.split('T')[0] : '', 
+        evaluator: '', // O nome do avaliador não está nesta tabela, deixa vazio para o user preencher se quiser
+        
         sector_id: data.setor_id,
         responsible: data.responsible_name,
         score: data.nota,
@@ -191,7 +198,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
         observations: data.observacao,
         photo_url: data.foto_url,
         user_id: data.user_id
-      } as unknown as EvaluationFull
+      } as EvaluationFull
 
       editingEvaluationId.value = id
 
@@ -230,6 +237,31 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     }
   }
 
+  /**
+   * Limpar banco de dados (Ação Administrativa)
+   * Resolve o erro do AdminModal
+   */
+  async function deleteAllEvaluations() {
+    loading.value = true
+    try {
+       // Deleta todos os registros onde o ID não é nulo (ou seja, tudo)
+       // Isso requer que a Policy no Supabase permita DELETE para o usuário admin
+       const { error: err } = await supabaseClient
+         .from('avaliacoes')
+         .delete()
+         .neq('id', '00000000-0000-0000-0000-000000000000') 
+       
+       if (err) throw err
+       return true
+    } catch (err: any) {
+      console.error('Erro ao limpar banco:', err)
+      error.value = err.message
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     loading,
     error,
@@ -240,6 +272,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     submitEvaluation,
     fetchEvaluationForEdit,
     clearEditMode,
-    deleteEvaluation
+    deleteEvaluation,
+    deleteAllEvaluations
   }
 })
