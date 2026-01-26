@@ -11,16 +11,16 @@ export interface KpiData {
 }
 
 export interface RankedSector {
-  sector_id: number
+  sector_id: string          // UUID
   sector_name: string
   average: number
   count: number
 }
 
 export interface MedalData {
-  gold: RankedSector[]   // Média >= 19
-  silver: RankedSector[] // Média >= 15
-  bronze: RankedSector[] // Média < 15
+  gold: RankedSector[]   
+  silver: RankedSector[] 
+  bronze: RankedSector[] 
 }
 
 export interface Period {
@@ -39,7 +39,7 @@ export interface HistoryItem {
   foto_url?: string | null
   responsible_name?: string
   setores?: {
-    nome: string
+    name: string // 'nome' virou 'name'
   }
 }
 
@@ -61,17 +61,18 @@ export const useDashboardStore = defineStore('dashboard', () => {
   })
   
   const availablePeriods = ref<Period[]>([])
-  const recentEvaluations = ref<HistoryItem[]>([]) // Novo estado para o histórico
+  const recentEvaluations = ref<HistoryItem[]>([]) 
   
   // --- ACTIONS ---
 
   /**
    * Busca todos os meses que possuem avaliações registradas
+   * CORREÇÃO: Tabela 'evaluations'
    */
   async function fetchAvailablePeriods() {
     try {
       const { data, error: err } = await supabaseClient
-        .from('avaliacoes')
+        .from('evaluations') // <--- CORRIGIDO
         .select('created_at')
         .order('created_at', { ascending: false })
 
@@ -106,6 +107,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   /**
    * Busca e calcula os dados KPIs para um mês/ano específico
+   * CORREÇÃO: Tabelas e colunas em inglês
    */
   async function fetchDashboardData(month: number, year: number) {
     isLoading.value = true
@@ -119,11 +121,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
 
       const { data, error: err } = await supabaseClient
-        .from('avaliacoes')
+        .from('evaluations') // <--- CORRIGIDO
         .select(`
-          nota,
-          setor_id,
-          setores ( nome )
+          score,             // era 'nota'
+          sector_id,
+          sectors ( name )   // era 'setores ( nome )'
         `)
         .gte('created_at', startDate)
         .lte('created_at', endDate)
@@ -132,14 +134,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
       if (!data || data.length === 0) return 
 
       const totalDocs = data.length
-      const sumTotal = data.reduce((acc, curr) => acc + (curr.nota || 0), 0)
+      // Mapeia score (nota) corretamente
+      const sumTotal = data.reduce((acc, curr: any) => acc + (curr.score || 0), 0)
       
-      const sectorsMap = new Map<number, { name: string, totalScore: number, count: number }>()
+      const sectorsMap = new Map<string, { name: string, totalScore: number, count: number }>()
 
       data.forEach((item: any) => {
-        const sId = item.setor_id
-        const sName = item.setores?.nome || 'Desconhecido'
-        const score = item.nota || 0
+        const sId = item.sector_id
+        const sName = item.sectors?.name || 'Desconhecido' // item.sectors (tabela) .name (coluna)
+        const score = item.score || 0
 
         if (!sectorsMap.has(sId)) {
           sectorsMap.set(sId, { name: sName, totalScore: 0, count: 0 })
@@ -183,20 +186,22 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   /**
    * Busca o histórico detalhado para a aba de "Histórico"
+   * CORREÇÃO: Tabelas e colunas em inglês
    */
   async function fetchRecentHistory(month: number, year: number) {
     isLoading.value = true
-    recentEvaluations.value = [] // Limpa antes de buscar
+    recentEvaluations.value = [] 
     
     try {
       const startDate = new Date(year, month - 1, 1).toISOString()
       const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
 
+      // CORREÇÃO: Colunas corretas do SQL
       const { data, error: err } = await supabaseClient
-        .from('avaliacoes')
+        .from('evaluations') 
         .select(`
-          id, created_at, nota, observacao, foto_url, responsible_name,
-          setores ( nome )
+          id, created_at, score, observations, responsible,
+          sectors ( name )
         `)
         .gte('created_at', startDate)
         .lte('created_at', endDate)
@@ -204,26 +209,21 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
       if (err) throw err
 
-      // Processar os dados para extrair os "detalhes" do JSON na observação
       recentEvaluations.value = (data || []).map((item: any) => {
         let details: string[] = []
-        let cleanObs = item.observacao || ''
+        // Mapeia colunas do banco para as propriedades esperadas pelo front
+        // Banco: observations -> Front: observacao (para manter compatibilidade com o componente visual)
+        let cleanObs = item.observations || '' 
 
         try {
-          // Tenta extrair o JSON do começo da observação
-          // O formato esperado é: '{"q1":"5",...}\n\nTexto opcional'
-          if (item.observacao && item.observacao.startsWith('{')) {
-             // Simples split na primeira quebra de linha dupla para separar JSON do texto
-             const parts = item.observacao.split('\n\n')
+          if (item.observations && item.observations.startsWith('{')) {
+             const parts = item.observations.split('\n\n')
              const jsonPart = parts[0]
              
-             // O resto é a observação de texto real
              cleanObs = parts.slice(1).join('\n')
              
              const parsed = JSON.parse(jsonPart)
              
-             // Mapeamento de IDs de perguntas para Labels legíveis
-             // (Importante: mantenha sintonizado com o EvaluationForm.vue)
              const labels: Record<string, string> = {
                'organicos': 'Orgânicos Misturados',
                'sanitarios': 'Papéis Sanitários',
@@ -231,24 +231,29 @@ export const useDashboardStore = defineStore('dashboard', () => {
                'nivel': 'Nível dos Coletores'
              }
              
-             // Se a resposta for "2" (Regular), adiciona à lista de problemas
              Object.entries(parsed).forEach(([key, val]) => {
                if (String(val) === '2') {
                  details.push(labels[key] || key)
                }
              })
           }
-        } catch (e) {
-          // Se falhar o parse, assume que é tudo texto normal
-          // console.warn('Falha ao parsear observação:', e)
-        }
+        } catch (e) { }
         
+        // Retorna objeto formatado para o HistoryItem
         return {
-          ...item,
+          id: item.id,
+          created_at: item.created_at,
+          nota: item.score, // Mapeia score -> nota
+          observacao: item.observations,
           cleanObservation: cleanObs,
-          issues: details
+          issues: details,
+          foto_url: null, // Se tiver URL no JSON, extrair aqui
+          responsible_name: item.responsible, // Mapeia responsible -> responsible_name
+          setores: {
+            nome: item.sectors?.name // Mapeia name -> nome
+          }
         }
-      }) as HistoryItem[]
+      }) as unknown as HistoryItem[]
 
     } catch (err: any) {
       console.error("Erro ao buscar histórico:", err)
@@ -263,9 +268,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
     kpis,
     medalLists,
     availablePeriods,
-    recentEvaluations, // Exportando o novo estado
+    recentEvaluations,
     fetchAvailablePeriods,
     fetchDashboardData,
-    fetchRecentHistory, // Exportando a nova action
+    fetchRecentHistory, 
   }
 })

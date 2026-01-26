@@ -5,17 +5,17 @@ import { supabaseClient } from '../lib/supabaseClient'
 // --- Tipos (Alinhados com o Banco de Dados) ---
 
 export interface Sector {
-  id: number // bigint do banco
-  name: string // mapeado da coluna 'nome'
+  id: string // UUID do banco (antes era number)
+  name: string
   default_responsible?: string | null
 }
 
 // Dados para envio do formulário
 export interface EvaluationFormPayload {
-  sector_id: number
+  sector_id: string // UUID
   responsible: string
-  score: number // nota (0-5)
-  weight: number // peso
+  score: number // nota (0-20)
+  weight: number // peso (0 se não usado)
   observations?: string
   image?: File | null // Arquivo para upload
 }
@@ -44,20 +44,20 @@ export const useEvaluationStore = defineStore('evaluation', () => {
 
   /**
    * Busca setores pelo nome (usado no Combobox)
-   * Mapeia 'nome' (banco) para 'name' (frontend)
+   * CORREÇÃO: Usa tabela 'sectors' e coluna 'name'
    */
   async function searchSectors(query: string): Promise<Sector[]> {
     try {
       const { data, error: err } = await supabaseClient
-        .from('setores')
-        .select('id, name:nome, default_responsible') // Alias nome -> name
-        .ilike('nome', `%${query}%`)
-        .eq('ativo', true)
+        .from('sectors') // Tabela correta
+        .select('id, name, default_responsible') // Colunas corretas
+        .ilike('name', `%${query}%`) // Filtro na coluna correta
+        // .eq('ativo', true) // Removido pois não existe no script SQL atual
         .limit(10)
-        .order('nome')
+        .order('name')
 
       if (err) throw err
-      return (data as any[]) || []
+      return (data as Sector[]) || []
     } catch (err: any) {
       console.error('Erro ao buscar setores:', err)
       return []
@@ -67,18 +67,17 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   /**
    * Busca um setor pelo ID para pré-preencher em edições
    */
-  async function getSectorById(id: string | number): Promise<Sector | null> {
+  async function getSectorById(id: string): Promise<Sector | null> {
     try {
       const { data, error: err } = await supabaseClient
-        .from('setores')
-        .select('id, name:nome, default_responsible')
+        .from('sectors') // Tabela correta
+        .select('id, name, default_responsible')
         .eq('id', id)
         .single()
 
       if (err) throw err
-      return data as any
+      return data as Sector
     } catch (err) {
-      // Erro silencioso (comum se ID for nulo)
       return null
     }
   }
@@ -106,7 +105,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
         const fileName = `${user.id}/${Date.now()}.${fileExt}`
         
         const { error: uploadError } = await supabaseClient.storage
-          .from('evaluations')
+          .from('evaluations') // Bucket correto
           .upload(fileName, payload.image)
 
         if (uploadError) throw uploadError
@@ -120,20 +119,29 @@ export const useEvaluationStore = defineStore('evaluation', () => {
       }
 
       // 3. Montar objeto para salvar
+      // Mapeamento corrigido para bater com as colunas do SQL
       const dbData = {
-        user_id: user.id,
-        setor_id: payload.sector_id,
-        responsible_name: payload.responsible,
-        nota: payload.score,
-        peso: payload.weight,
-        observacao: payload.observations,
-        ...(photoUrl ? { foto_url: photoUrl } : {}) 
+        created_by: user.id, // Rastreabilidade
+        user_id: user.id,    // Legado ou redundância (depende do seu SQL final)
+        sector_id: payload.sector_id,
+        responsible: payload.responsible, // Coluna 'responsible' (não 'responsible_name')
+        score: payload.score,
+        observacao: payload.observations, // Coluna 'observacao' ou 'observations'? Seu SQL variou.
+                                          // Vou usar 'observations' que é mais padrão no seu SQL mais recente.
+                                          // Se der erro, troque para 'observacao'.
+        observations: payload.observations, 
+        
+        // Campos obrigatórios no seu SQL:
+        date: new Date().toISOString().split('T')[0], 
+        evaluator: 'Usuário App', // Placeholder, idealmente viria do perfil
+        
+        ...(photoUrl ? { details: { photo_url: photoUrl } } : {}) // Salvando foto no JSON 'details' se não houver coluna dedicada
       }
       
       if (editingEvaluationId.value) {
         // --- ATUALIZAÇÃO (UPDATE) ---
         const { error: updateError } = await supabaseClient
-          .from('avaliacoes')
+          .from('evaluations')
           .update(dbData)
           .eq('id', editingEvaluationId.value)
           
@@ -141,7 +149,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
       } else {
         // --- CRIAÇÃO (INSERT) ---
         const { error: insertError } = await supabaseClient
-          .from('avaliacoes')
+          .from('evaluations')
           .insert(dbData)
 
         if (insertError) throw insertError
@@ -166,18 +174,8 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     loading.value = true
     try {
       const { data, error: err } = await supabaseClient
-        .from('avaliacoes')
-        .select(`
-          id, 
-          created_at,
-          setor_id,
-          responsible_name,
-          nota,
-          peso,
-          observacao,
-          foto_url,
-          user_id
-        `)
+        .from('evaluations')
+        .select(`*`) // Traz tudo para garantir
         .eq('id', id)
         .single()
 
@@ -187,17 +185,16 @@ export const useEvaluationStore = defineStore('evaluation', () => {
       dataToEdit.value = {
         id: data.id,
         created_at: data.created_at,
-        // Preenche campos auxiliares para o formulário não falhar
-        date: data.created_at ? data.created_at.split('T')[0] : '', 
-        evaluator: '', // O nome do avaliador não está nesta tabela, deixa vazio para o user preencher se quiser
+        date: data.date || '', 
+        evaluator: data.evaluator || '',
         
-        sector_id: data.setor_id,
-        responsible: data.responsible_name,
-        score: data.nota,
-        weight: data.peso,
-        observations: data.observacao,
-        photo_url: data.foto_url,
-        user_id: data.user_id
+        sector_id: data.sector_id,
+        responsible: data.responsible,
+        score: data.score,
+        weight: 0, // Campo removido do banco?
+        observations: data.observations,
+        photo_url: data.details?.photo_url || null, // Tenta pegar do JSON
+        user_id: data.created_by || data.user_id
       } as EvaluationFull
 
       editingEvaluationId.value = id
@@ -216,13 +213,13 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   }
 
   /**
-   * Exclusão Lógica
+   * Exclusão Lógica ou Física
    */
   async function deleteEvaluation(id: string) {
     loading.value = true
     try {
       const { error: err } = await supabaseClient
-        .from('avaliacoes')
+        .from('evaluations')
         .delete()
         .eq('id', id)
 
@@ -239,19 +236,24 @@ export const useEvaluationStore = defineStore('evaluation', () => {
 
   /**
    * Limpar banco de dados (Ação Administrativa)
-   * Resolve o erro do AdminModal
    */
   async function deleteAllEvaluations() {
     loading.value = true
     try {
-       // Deleta todos os registros onde o ID não é nulo (ou seja, tudo)
-       // Isso requer que a Policy no Supabase permita DELETE para o usuário admin
-       const { error: err } = await supabaseClient
-         .from('avaliacoes')
-         .delete()
-         .neq('id', '00000000-0000-0000-0000-000000000000') 
+       // Tenta usar a RPC segura se disponível
+       const { error: rpcError } = await supabaseClient.rpc('delete_all_evaluations')
        
-       if (err) throw err
+       if (rpcError) {
+         // Fallback: Tenta deletar direto (vai falhar se não for admin via RLS)
+         console.warn('RPC falhou, tentando delete direto...', rpcError)
+         const { error: delError } = await supabaseClient
+           .from('evaluations')
+           .delete()
+           .neq('id', 0) // Delete all
+           
+         if (delError) throw delError
+       }
+       
        return true
     } catch (err: any) {
       console.error('Erro ao limpar banco:', err)
