@@ -1,15 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
-import { useUiStore } from './uiStore' 
+import { useUiStore } from './uiStore'
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutos
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<any>(null)
-  const userRole = ref<string | null>(null)
+  const userRole = ref<string>('user') // Padrão seguro para evitar null
   const loading = ref(true)
-  const error = ref<string | null>(null)
   const inactivityTimer = ref<ReturnType<typeof setTimeout> | undefined>(undefined)
   
   const uiStore = useUiStore()
@@ -43,11 +42,29 @@ export const useAuthStore = defineStore('auth', () => {
     activityEvents.forEach(event => document.removeEventListener(event, resetInactivityTimer))
   }
 
-  // --- INICIALIZAÇÃO ---
+  // --- CORE: Busca de Role Blindada ---
+  async function fetchUserRole(userId: string) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+      
+      if (error) throw error
+      if (data) userRole.value = data.role
+
+    } catch (e) {
+      console.warn('Não foi possível buscar a role no banco. Usando "user" como fallback.', e)
+      userRole.value = 'user' // Fallback para não travar o login
+    }
+  }
+
+  // --- INIT ---
   async function init() {
     loading.value = true
     
-    // Verifica recuperação de senha na URL
+    // Verifica recuperação na URL
     if (window.location.hash && window.location.hash.includes('type=recovery')) {
        uiStore.authModalMode = 'update_password'
        uiStore.openModal('auth')
@@ -56,77 +73,59 @@ export const useAuthStore = defineStore('auth', () => {
     const { data } = await supabaseClient.auth.getSession()
     if (data.session?.user) {
       user.value = data.session.user
-      await fetchUserRole(user.value.id)
+      // Não usamos await aqui para não bloquear a renderização inicial
+      fetchUserRole(user.value.id)
       startInactivityTimer()
     }
     loading.value = false
 
-    // Escuta mudanças de auth
     supabaseClient.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
          uiStore.authModalMode = 'update_password'
          uiStore.openModal('auth')
       } else if (event === 'SIGNED_IN' && session?.user) {
         user.value = session.user
-        await fetchUserRole(session.user.id)
+        fetchUserRole(session.user.id)
         startInactivityTimer()
       } else if (event === 'SIGNED_OUT') {
         user.value = null
-        userRole.value = null
+        userRole.value = 'user'
         stopInactivityTimer()
       }
     })
   }
 
-  async function fetchUserRole(userId: string) {
-    try {
-      const { data: profile } = await supabaseClient
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single()
-      
-      if (profile) {
-          userRole.value = profile.role
-      } else {
-          // Fallback para RPC se perfil falhar
-          const { data: role } = await supabaseClient.rpc('get_my_role')
-          userRole.value = role
-      }
-    } catch (e) {
-      console.error('Erro ao buscar role:', e)
-      userRole.value = 'user' 
-    }
-  }
-
-  // --- ACTIONS DE LOGIN ---
-  
+  // --- LOGIN ---
   async function handleLogin(email: string, pass: string): Promise<boolean> {
-    error.value = null
     try {
-      // CORREÇÃO: Removemos 'data' que não estava sendo usado
-      const { error: err } = await supabaseClient.auth.signInWithPassword({
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
         email,
         password: pass,
       })
 
-      if (err) throw err
+      if (error) throw error
       
-      return true 
+      // Se chegou aqui, logou.
+      if (data.user) {
+        user.value = data.user
+        // Tentativa "Best Effort" de pegar a role
+        fetchUserRole(data.user.id) 
+      }
+      
+      return true // Retorna true para o Modal fazer o reload
 
     } catch (e: any) {
-      console.error('Login error:', e)
-      error.value = e.message
-      return false 
+      console.error('Login error:', e.message)
+      return false
     }
   }
 
   async function handleLogout() {
     await supabaseClient.auth.signOut()
     user.value = null
-    userRole.value = null
-    uiStore.authModalMode = 'login'
+    userRole.value = 'user'
     stopInactivityTimer()
+    uiStore.authModalMode = 'login'
   }
 
   async function handleForgotPassword(email: string) {
@@ -136,23 +135,20 @@ export const useAuthStore = defineStore('auth', () => {
   
   async function completePasswordRecovery() {
     window.history.replaceState({}, document.title, window.location.pathname)
-    
     const { data } = await supabaseClient.auth.getSession()
     if (data.session?.user) {
         user.value = data.session.user
-        await fetchUserRole(data.session.user.id)
-        
+        fetchUserRole(data.session.user.id)
         uiStore.closeModal()
-        uiStore.showToast('Senha recuperada com sucesso!', 'success')
+        uiStore.showToast('Senha recuperada!', 'success')
         startInactivityTimer()
     }
   }
 
   return {
     user,
-    userRole,
+    userRole, 
     loading,
-    error,
     isAuthReady,
     isAuthenticated,
     init,
