@@ -38,8 +38,11 @@ export interface HistoryItem {
   issues: string[]
   foto_url?: string | null
   responsible_name?: string
+  // Adicionei 'setor_nome' plano para facilitar
+  setor_nome: string
+  // Mantemos a estrutura antiga para compatibilidade
   setores?: {
-    name: string // Mantemos 'name' para alinhar com o banco e o componente novo
+    name: string 
   }
 }
 
@@ -123,8 +126,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
         .select(`
           score,
           sector_id,
+          sector, 
           sectors ( name )
         `)
+        // Adicionamos 'sector' no select acima como fallback
         .gte('created_at', startDate)
         .lte('created_at', endDate)
 
@@ -137,8 +142,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const sectorsMap = new Map<string, { name: string, totalScore: number, count: number }>()
 
       data.forEach((item: any) => {
-        const sId = item.sector_id // UUID string
-        const sName = item.sectors?.name || 'Desconhecido'
+        const sId = item.sector_id || item.sector || 'unknown' // Tenta ID, se falhar tenta nome antigo
+        
+        // CORREÇÃO AQUI: Tenta relação nova -> tenta coluna velha -> default
+        const sName = item.sectors?.name || item.sector || 'Setor Desconhecido'
         const score = item.score || 0
 
         if (!sectorsMap.has(sId)) {
@@ -163,6 +170,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
       rankedSectors.sort((a, b) => b.average - a.average)
 
+      // Regras de Medalhas
       medalLists.value.gold = rankedSectors.filter(s => s.average >= 19)
       medalLists.value.silver = rankedSectors.filter(s => s.average >= 15 && s.average < 19)
       medalLists.value.bronze = rankedSectors.filter(s => s.average < 15)
@@ -195,7 +203,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const { data, error: err } = await supabaseClient
         .from('evaluations') 
         .select(`
-          id, created_at, score, observations, responsible, details,
+          id, created_at, score, observations, responsible, details, sector,
           sectors ( name )
         `)
         .gte('created_at', startDate)
@@ -212,18 +220,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
           if (item.observations && item.observations.startsWith('{')) {
              const parts = item.observations.split('\n\n')
              const jsonPart = parts[0]
-             
              cleanObs = parts.slice(1).join('\n')
              
              const parsed = JSON.parse(jsonPart)
-             
              const labels: Record<string, string> = {
                'organicos': 'Orgânicos Misturados',
                'sanitarios': 'Papéis Sanitários',
                'outros': 'Outros Não Recicláveis',
                'nivel': 'Nível dos Coletores'
              }
-             
              Object.entries(parsed).forEach(([key, val]) => {
                if (String(val) === '2') {
                  details.push(labels[key] || key)
@@ -232,6 +237,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
           }
         } catch (e) { }
         
+        // CORREÇÃO: Resolve o nome com prioridade
+        const nomeResolvido = item.sectors?.name || item.sector || 'Sem Nome';
+
         return {
           id: item.id,
           created_at: item.created_at,
@@ -239,10 +247,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
           observacao: item.observations,
           cleanObservation: cleanObs,
           issues: details,
-          foto_url: item.details?.photo_url || null, // Busca a foto do JSON
+          foto_url: item.details?.photo_url || null,
           responsible_name: item.responsible,
+          
+          // Adicionamos propriedade plana
+          setor_nome: nomeResolvido, 
+          
+          // Mantemos estrutura antiga mas com dados garantidos
           setores: {
-            name: item.sectors?.name // CORREÇÃO: Mapeia para 'name' (não 'nome')
+            name: nomeResolvido
           }
         }
       }) as unknown as HistoryItem[]

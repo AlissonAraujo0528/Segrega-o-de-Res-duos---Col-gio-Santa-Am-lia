@@ -11,8 +11,12 @@ export interface EvaluationResult {
   score: number
   date: string
   evaluator: string
-  // Relação correta com a tabela 'sectors'
-  sectors: { name: string } | null 
+  // Relação com a tabela 'sectors'
+  sectors: { name: string } | null
+  // Coluna antiga (texto) para fallback
+  sector?: string | null
+  // Campo calculado para facilitar o display no Vue
+  setor_nome?: string 
   deleted_at?: string | null
 }
 
@@ -22,6 +26,7 @@ interface EvaluationExport {
   score: number
   date: string | null
   evaluator: string
+  sector?: string | null // Coluna antiga
   sectors: { name: string } | null
   responsible: string | null
   observations: string | null
@@ -48,14 +53,12 @@ export const useRankingStore = defineStore('ranking', () => {
     const to = from + recordsPerPage - 1
 
     try {
-      let data: EvaluationResult[] | null = null
+      let data: any[] | null = null
       let error: any = null
       let count: number | null = null
 
       if (!filter) {
         // --- LÓGICA (Sem filtro) ---
-        // Busca na tabela 'evaluations' e faz join com 'sectors'
-        // IMPORTANTE: Trazemos apenas 'name' da relação para evitar overhead e erros
         const {
           data: queryData,
           error: queryError,
@@ -67,19 +70,19 @@ export const useRankingStore = defineStore('ranking', () => {
             score, 
             date, 
             evaluator, 
-            deleted_at, 
+            deleted_at,
+            sector,  
             sectors ( name )
           `, { count: 'exact' })
           .is('deleted_at', null) // Filtra excluídos
           .order('score', { ascending: false })
           .range(from, to)
 
-        data = queryData as unknown as EvaluationResult[]
+        data = queryData
         error = queryError
         count = queryCount
       } else {
-        // --- LÓGICA (Com filtro) ---
-        // Usa a RPC 'search_evaluations' (que deve estar atualizada no banco)
+        // --- LÓGICA (Com filtro - RPC) ---
         const { data: rpcData, error: rpcError } = await supabaseClient.rpc(
           'search_evaluations',
           {
@@ -91,7 +94,6 @@ export const useRankingStore = defineStore('ranking', () => {
 
         if (rpcError) throw rpcError
 
-        // A RPC retorna { data: [...], count: N }
         data = rpcData.data
         error = rpcError
         count = rpcData.count
@@ -99,7 +101,26 @@ export const useRankingStore = defineStore('ranking', () => {
 
       if (error) throw error
 
-      results.value = data as unknown as EvaluationResult[]
+      // === CORREÇÃO: Processamento dos dados para garantir que o nome apareça ===
+      if (data) {
+        results.value = data.map((item: any) => {
+          // Lógica de Fallback:
+          // 1. Tenta o nome da nova relação (sectors.name)
+          // 2. Se falhar, tenta o nome da coluna antiga (item.sector)
+          // 3. Se tudo falhar, exibe 'Setor Desconhecido'
+          const nomeResolvido = item.sectors?.name || item.sector || 'Setor Desconhecido';
+
+          return {
+            ...item,
+            setor_nome: nomeResolvido,
+            // Garante formatação de data para evitar erros visuais
+            data_formatada: item.date ? new Date(item.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'
+          }
+        })
+      } else {
+        results.value = []
+      }
+
       totalPages.value = Math.ceil((count || 0) / recordsPerPage) || 1
     } catch (error) {
       console.error('Erro ao carregar ranking:', error)
@@ -165,7 +186,10 @@ export const useRankingStore = defineStore('ranking', () => {
   }
 
   async function fetchAllResultsForExport(): Promise<EvaluationExport[]> {
-    // Busca tudo para exportação (pode ser pesado, cuidado em produção real)
+    // Busca tudo para exportação
+    // Adicionamos 'sector' (coluna antiga) no select caso não esteja usando RPC aqui
+    // Mas como está usando RPC 'search_evaluations', ela precisa retornar 'sector' se quisermos fallback
+    // Por segurança, assumimos que a RPC retorna o objeto sectors corretamente preenchido.
     const { data: rpcData, error: rpcError } = await supabaseClient.rpc(
       'search_evaluations',
       {
@@ -190,12 +214,8 @@ export const useRankingStore = defineStore('ranking', () => {
     return datePart ? datePart.replace(/-/g, '') : '00000000'
   }
 
-  /**
-   * Adapta o ID para exibição (UUID é longo, pegamos os últimos 6 chars para brevidade)
-   */
   function padId(id: string): string {
     if (!id) return '000000'
-    // Se for UUID, pega os ultimos 6 caracteres para não quebrar o Excel
     return id.slice(-6).toUpperCase()
   }
 
@@ -208,22 +228,26 @@ export const useRankingStore = defineStore('ranking', () => {
         throw new Error('Não há dados para exportar.')
       }
 
-      const formattedData = data.map((item) => ({
-        'ID (Ref)': `${formatDateForId(item.date)}-${padId(item.id)}`,
-        'Data': item.date
-          ? new Date(item.date).toLocaleDateString('pt-BR', {
-              timeZone: 'UTC',
-            })
-          : 'Data Inválida',
+      const formattedData = data.map((item) => {
+        // Mesma lógica de fallback para o Excel
+        const nomeSetor = item.sectors?.name || item.sector || 'Setor Desconhecido';
 
-        // CORREÇÃO: Acesso correto ao nome do setor
-        'Setor': item.sectors ? item.sectors.name : 'N/A',
-
-        'Pontuação': item.score,
-        'Avaliador': item.evaluator,
-        'Responsável': item.responsible ?? '',
-        'Observações': item.observations ?? '',
-      }))
+        return {
+          'ID (Ref)': `${formatDateForId(item.date)}-${padId(item.id)}`,
+          'Data': item.date
+            ? new Date(item.date).toLocaleDateString('pt-BR', {
+                timeZone: 'UTC',
+              })
+            : 'Data Inválida',
+  
+          'Setor': nomeSetor,
+  
+          'Pontuação': item.score,
+          'Avaliador': item.evaluator,
+          'Responsável': item.responsible ?? '',
+          'Observações': item.observations ?? '',
+        }
+      })
 
       const timestamp = new Date().toISOString().split('T')[0]
       exportToExcel(formattedData, `Export_Klin_Avaliacoes_${timestamp}`)
