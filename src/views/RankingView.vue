@@ -31,8 +31,10 @@ watch(localFilterText, (newFilter) => {
   }, 500)
 })
 
+// --- CORREÇÃO DO ERRO ---
 function handleEdit(id: string) {
-  rankingStore.fetchEvaluationForEdit(id)
+  // O nome da action na store mudou para openEditModal
+  rankingStore.openEditModal(id)
 }
 
 function handleDelete(id: string) {
@@ -45,9 +47,12 @@ function handleDelete(id: string) {
     okButtonClass: 'bg-red-600 hover:bg-red-700 text-white', 
     onConfirm: async () => {
       try {
-        await evaluationStore.deleteEvaluation(id)
-        uiStore.showToast('Avaliação movida para a lixeira.', 'success')
-        await rankingStore.fetchResults(rankingStore.currentPage, localFilterText.value)
+        const success = await evaluationStore.deleteEvaluation(id)
+        if (success) {
+            uiStore.showToast('Avaliação movida para a lixeira.', 'success')
+            // Recarrega a lista para sumir com o item deletado
+            await rankingStore.fetchResults(rankingStore.currentPage, localFilterText.value)
+        }
       } catch (error: any) {
         uiStore.showToast(error.message, 'error')
       }
@@ -64,7 +69,7 @@ function getScoreBadgeClass(score: number) {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 animate-fade-in">
     
     <header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
@@ -105,10 +110,12 @@ function getScoreBadgeClass(score: number) {
         <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700">
           <thead class="bg-gray-50 dark:bg-gray-700/50">
             <tr>
-              <th v-for="h in ['Pos.', 'Setor / Sala', 'Pontos', 'Data', 'Avaliador', isAdmin ? 'Ações' : '']" :key="h"
-                  class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {{ h }}
-              </th>
+              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pos.</th>
+              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Setor / Sala</th>
+              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pontos</th>
+              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data</th>
+              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Avaliador</th>
+              <th v-if="isAdmin" class="px-6 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
@@ -159,9 +166,11 @@ function getScoreBadgeClass(score: number) {
                 </div>
               </td>
 
-              <td v-if="isAdmin" class="px-6 py-4 whitespace-nowrap flex gap-2">
-                <AppButton size="sm" variant="ghost" icon="fa-solid fa-pencil" @click="handleEdit(item.id)" title="Editar" />
-                <AppButton size="sm" variant="ghost" class="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" icon="fa-solid fa-trash" @click="handleDelete(item.id)" title="Excluir" />
+              <td v-if="isAdmin" class="px-6 py-4 whitespace-nowrap text-right">
+                <div class="flex justify-end gap-2">
+                    <AppButton size="sm" variant="ghost" icon="fa-solid fa-pencil" @click="handleEdit(item.id)" title="Editar" />
+                    <AppButton size="sm" variant="ghost" class="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" icon="fa-solid fa-trash" @click="handleDelete(item.id)" title="Excluir" />
+                </div>
               </td>
             </tr>
           </tbody>
@@ -194,3 +203,8 @@ function getScoreBadgeClass(score: number) {
     </AppCard>
   </div>
 </template>
+
+<style scoped>
+.animate-fade-in { animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>

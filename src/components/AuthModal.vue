@@ -47,7 +47,7 @@ async function handleSubmit() {
       }
     } 
     
-    else if (mode.value === 'register') { // Usamos 'register' como 'recovery' no uiStore antigo
+    else if (mode.value === 'register') { 
       if (!email.value) throw new Error('Digite seu e-mail.')
       const { error } = await authStore.handleForgotPassword(email.value)
       if (error) throw error
@@ -58,20 +58,12 @@ async function handleSubmit() {
     else if (mode.value === 'update_password') {
       if (newPassword.value.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.')
       
-      // Atualiza senha no Supabase
-      const { error } = await authStore.completePasswordRecovery() as any // Tipagem pode variar
-      // Nota: A função completePasswordRecovery do store já faz a lógica, 
-      // mas se precisar de chamada direta ao supabase, seria aqui.
-      // Assumindo que o store cuida disso ou que precisamos implementar aqui:
-      
-      // Implementação direta caso o store não tenha:
-      // await supabaseClient.auth.updateUser({ password: newPassword.value })
-      
-      // Mas vamos confiar no store se ele tiver o método, senão:
-      uiStore.showToast('Senha atualizada! Você já está logado.', 'success')
-      close()
+      await authStore.completePasswordRecovery()
+      // O store já exibe toast e fecha o modal se der certo
     }
   } catch (error: any) {
+    // CORREÇÃO: Logamos o erro para satisfazer o TypeScript (TS6133) e ajudar no debug
+    console.error('Erro no AuthModal:', error)
     uiStore.showToast(error.message || 'Ocorreu um erro.', 'error')
   } finally {
     isLoading.value = false
