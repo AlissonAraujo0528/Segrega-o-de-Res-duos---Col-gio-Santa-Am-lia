@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEvaluationStore, type EvaluationFormPayload } from '../stores/evaluationStore'
 import { useUiStore } from '../stores/uiStore'
-import { useAuthStore } from '../stores/authStore'
+// Removido useAuthStore pois não estava sendo usado no template atual
 import AppButton from '../components/ui/AppButton.vue'
 import AppCard from '../components/ui/AppCard.vue'
 import ComboboxSetor from '../components/ComboboxSetor.vue'
@@ -11,7 +11,6 @@ import ComboboxSetor from '../components/ComboboxSetor.vue'
 const router = useRouter()
 const evaluationStore = useEvaluationStore()
 const uiStore = useUiStore()
-const authStore = useAuthStore()
 
 // CSS Base
 const inputClass = "w-full rounded-lg border border-gray-300 dark:border-gray-600 p-2.5 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
