@@ -1,33 +1,33 @@
 <script setup lang="ts">
 import { useUiStore } from '../stores/uiStore'
 import { useEvaluationStore } from '../stores/evaluationStore'
-// Se tiver rankingStore e quiser atualizar após limpar:
 import { useRankingStore } from '../stores/rankingStore' 
-
-import BaseModal from './BaseModal.vue'
-import ModalHeader from './ModalHeader.vue'
+import AppButton from './ui/AppButton.vue'
 
 const uiStore = useUiStore()
 const evaluationStore = useEvaluationStore()
 const rankingStore = useRankingStore()
 
+// Fecha o modal usando a store atualizada
+function close() {
+  uiStore.closeModal()
+}
+
 async function handleClearDatabase() {
   uiStore.showConfirmModal({
     title: 'LIMPAR BANCO DE DADOS?',
-    message: 'ATENÇÃO: AÇÃO IRREVERSÍVEL! Todos os registros de avaliação serão apagados permanentemente do servidor. Deseja realmente continuar?',
+    message: 'ATENÇÃO: AÇÃO IRREVERSÍVEL! Todos os registros de avaliação serão apagados permanentemente. Deseja realmente continuar?',
     okButtonText: 'Sim, APAGAR TUDO',
-    // Usando classes utilitárias diretas caso 'bg-danger' não esteja configurado
-    okButtonClass: 'bg-red-600 hover:bg-red-700 text-white border-red-700',
-
+    okButtonClass: 'bg-red-600 hover:bg-red-700 text-white',
     onConfirm: async () => {
       try {
         const success = await evaluationStore.deleteAllEvaluations()
         
         if (success) {
           uiStore.showToast('Banco de dados limpo com sucesso!', 'success')
-          // Tenta atualizar o ranking se possível
+          // Tenta atualizar o ranking para limpar a visualização
           try { await rankingStore.fetchResults(1, '') } catch {} 
-          uiStore.closeModal()
+          close()
         } else {
           throw new Error(evaluationStore.error || 'Falha ao limpar.')
         }
@@ -40,57 +40,69 @@ async function handleClearDatabase() {
 </script>
 
 <template>
-  <BaseModal 
-    :isOpen="uiStore.activeModal === 'admin'" 
-    @close="uiStore.closeModal"
-    class="w-full max-w-lg" 
-    v-slot="{ titleId }"
-  >
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in" @click.self="close">
+    
+    <div class="bg-white dark:bg-gray-800 w-full max-w-lg rounded-xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
 
-    <ModalHeader :titleId="titleId">
-      <div class="flex items-center gap-3 text-red-600">
-        <i class="fa-solid fa-user-shield text-xl"></i>
-        <span class="font-bold text-lg">Área Administrativa</span>
+      <div class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-3 text-red-600 dark:text-red-500">
+           <div class="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+             <i class="fa-solid fa-user-shield text-xl"></i>
+           </div>
+           <span class="font-bold text-lg text-gray-800 dark:text-white">Área Administrativa</span>
+        </div>
+        <button @click="close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+          <i class="fa-solid fa-times text-xl"></i>
+        </button>
       </div>
-    </ModalHeader>
 
-    <div class="flex-1 overflow-auto p-6 space-y-6">
+      <div class="p-6 space-y-6">
 
-      <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
-        <div class="flex items-center">
-          <div class="flex-shrink-0">
-            <i class="fa-solid fa-triangle-exclamation text-red-500"></i>
-          </div>
-          <div class="ml-3">
-            <h3 class="text-sm font-bold text-red-800">Zona de Perigo</h3>
-            <div class="mt-1 text-sm text-red-700">
-              <p>As ações executadas aqui afetam diretamente o banco de dados em produção e não podem ser desfeitas.</p>
+        <div class="bg-red-50 dark:bg-red-900/10 border-l-4 border-red-500 p-4 rounded-r-lg">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <i class="fa-solid fa-triangle-exclamation text-red-500 mt-0.5"></i>
+            </div>
+            <div class="ml-3">
+              <h3 class="text-sm font-bold text-red-800 dark:text-red-400">Zona de Perigo</h3>
+              <div class="mt-1 text-sm text-red-700 dark:text-red-300">
+                <p>As ações executadas aqui afetam diretamente o banco de dados em produção e <strong>não podem ser desfeitas</strong>.</p>
+              </div>
             </div>
           </div>
         </div>
+
+        <div class="space-y-4">
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Ações Disponíveis:</p>
+          
+          <AppButton 
+            @click="handleClearDatabase"
+            :disabled="evaluationStore.loading"
+            :loading="evaluationStore.loading"
+            variant="danger"
+            class="w-full py-4 text-base shadow-lg shadow-red-500/20"
+            icon="fa-solid fa-trash-can"
+          >
+            Limpar Todas as Avaliações
+          </AppButton>
+        </div>
+
       </div>
 
-      <button 
-        @click="handleClearDatabase"
-        :disabled="evaluationStore.loading"
-        class="w-full group relative flex items-center justify-center gap-3 rounded-xl bg-red-600 px-6 py-4 text-white font-bold shadow-md transition-all
-               hover:bg-red-700 hover:shadow-lg hover:-translate-y-0.5
-               focus:ring-4 focus:ring-red-500/30 active:translate-y-0
-               disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-      >
-        <i v-if="evaluationStore.loading" class="fa-solid fa-circle-notch fa-spin"></i>
-        <i v-else class="fa-solid fa-trash-can group-hover:scale-110 transition-transform"></i>
-        
-        <span>{{ evaluationStore.loading ? 'Processando...' : 'Limpar Todas as Avaliações' }}</span>
-      </button>
-
-      <div class="text-center">
-         <button @click="uiStore.closeModal" class="text-sm text-gray-500 hover:text-gray-700 hover:underline">
-           Cancelar e voltar
-         </button>
+      <div class="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 border-t border-gray-100 dark:border-gray-700 text-center">
+        <button @click="close" class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors hover:underline">
+          Cancelar e voltar ao painel
+        </button>
       </div>
 
     </div>
-
-  </BaseModal>
+  </div>
 </template>
+
+<style scoped>
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }
+.animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+</style>

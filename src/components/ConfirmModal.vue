@@ -1,60 +1,59 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useUiStore } from '../stores/uiStore'
-import BaseModal from './BaseModal.vue'
+import AppModal from './ui/AppModal.vue'
+import AppButton from './ui/AppButton.vue'
 
 const uiStore = useUiStore()
 
-function getIconForButton(buttonClass: string | undefined) {
-  if (buttonClass?.includes('bg-danger') || buttonClass?.includes('bg-red')) {
+// Computa o ícone baseado na classe do botão (ex: vermelho = perigo)
+const confirmIcon = computed(() => {
+  const cls = uiStore.confirmState?.okButtonClass || ''
+  if (cls.includes('red') || cls.includes('danger')) {
     return 'fa-solid fa-triangle-exclamation'
   }
-  if (buttonClass?.includes('bg-success') || buttonClass?.includes('bg-green')) {
-    return 'fa-solid fa-check'
-  }
   return 'fa-solid fa-check'
+})
+
+function handleCancel() {
+  uiStore.closeModal()
+}
+
+function handleConfirm() {
+  uiStore.executeConfirm()
 }
 </script>
 
 <template>
-  <BaseModal
-    v-if="uiStore.isConfirmModalOpen && uiStore.confirmOptions"
-    class="max-w-lg w-[90%]"
-    v-slot="{ titleId }"
+  <AppModal 
+    :isOpen="uiStore.modals.confirm"
+    :title="uiStore.confirmState?.title || 'Confirmação'"
+    size="sm"
+    @close="handleCancel"
   >
-    <div
-      class="border-b border-border-light bg-bg-secondary p-6"
-    >
-      <h2
-        :id="titleId"
-        class="text-xl font-semibold text-text-primary"
-      >
-        {{ uiStore.confirmOptions.title }}
-      </h2>
+    
+    <div class="text-gray-700 dark:text-gray-300 text-base leading-relaxed">
+      {{ uiStore.confirmState?.message }}
     </div>
 
-    <div class="p-6 text-text-secondary">
-      {{ uiStore.confirmOptions.message }}
-    </div>
-
-    <div
-      class="flex flex-col gap-3 border-t border-border-light bg-bg-tertiary p-6"
-    >
-      <button
-        @click="uiStore.closeConfirmModal()"
-        class="w-full rounded-lg bg-gray-500 px-6 py-3 text-base font-semibold text-white outline-none transition-all hover:bg-gray-600 focus-ring:ring-2 focus-ring:ring-gray-400 sm:w-auto"
+    <template #footer>
+      <AppButton 
+        variant="secondary" 
+        @click="handleCancel"
+        :disabled="uiStore.isConfirmLoading"
       >
-        <i class="fa-solid fa-times mr-2"></i>
-        Cancelar
-      </button>
-
-      <button
-        @click="uiStore.executeConfirm()"
-        :class="uiStore.confirmOptions.okButtonClass"
-        class="w-full rounded-lg px-6 py-3 text-base font-semibold text-white outline-none transition-all hover:opacity-90 focus-ring:ring-2 focus-ring:ring-primary sm:w-auto"
+        {{ uiStore.confirmState?.cancelButtonText || 'Cancelar' }}
+      </AppButton>
+      
+      <AppButton 
+        @click="handleConfirm" 
+        :loading="uiStore.isConfirmLoading"
+        :class="uiStore.confirmState?.okButtonClass" 
+        :icon="confirmIcon"
       >
-        <i :class="getIconForButton(uiStore.confirmOptions.okButtonClass)" class="mr-2"></i>
-        {{ uiStore.confirmOptions.okButtonText }}
-      </button>
-    </div>
-  </BaseModal>
+        {{ uiStore.confirmState?.okButtonText || 'Confirmar' }}
+      </AppButton>
+    </template>
+
+  </AppModal>
 </template>

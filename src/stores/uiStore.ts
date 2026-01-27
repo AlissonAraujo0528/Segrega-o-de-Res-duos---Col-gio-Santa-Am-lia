@@ -1,155 +1,178 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-// --- Tipos ---
-// Adicionado 'auth' e alterado para aceitar null
-export type ModalName = 'auth' | 'ranking' | 'dashboard' | 'admin' | null
-export type ThemeName = 'light' | 'dark' | 'system'
-export type AuthModalMode = 'login' | 'register' | 'update_password'
+// --- TIPOS ---
 
-export interface Notification {
+export type ToastType = 'success' | 'error' | 'info' | 'warning'
+
+export interface Toast {
   id: number
   message: string
-  type: 'success' | 'error' | 'info'
+  type: ToastType
+  duration?: number
 }
 
-interface ConfirmOptions {
+// Definição clara de quais modais existem no sistema
+// REMOVIDO: ranking e dashboard (agora são rotas)
+export interface ModalState {
+  evaluation: boolean
+  admin: boolean
+  auth: boolean
+  confirm: boolean
+}
+
+// Tipo para as opções do Modal de Confirmação
+export interface ConfirmOptions {
   title: string
   message: string
   okButtonText?: string
+  cancelButtonText?: string
   okButtonClass?: string
-  onConfirm: () => void | Promise<void>
+  onConfirm: () => Promise<void> | void
 }
 
-export const useUiStore = defineStore('ui', () => {
-  // --- STATE ---
-  const activeModal = ref<ModalName>(null)
-  const authModalMode = ref<AuthModalMode>('login')
-  const theme = ref<ThemeName>('system')
+export type ThemeName = 'light' | 'dark' | 'system'
 
-  // Notificações e Confirmação (Mantido do seu código original)
-  const notifications = ref<Notification[]>([])
-  const isConfirmModalOpen = ref(false)
-  const confirmOptions = ref<ConfirmOptions | null>(null)
+export const useUiStore = defineStore('ui', () => {
+  
+  // --- STATE ---
+  
+  // 1. Modais
+  const modals = ref<ModalState>({
+    evaluation: false,
+    admin: false,
+    auth: false,
+    confirm: false
+  })
+
+  // 2. Auth Modal Mode
+  const authModalMode = ref<'login' | 'register' | 'update_password'>('login')
   const isRecoveryMode = ref(false)
 
-  // --- ACTIONS ---
+  // 3. Toasts
+  const toasts = ref<Toast[]>([])
+  let toastIdCounter = 0
 
-  function openModal(name: ModalName) {
-    activeModal.value = name
+  // 4. Confirmação
+  const confirmState = ref<ConfirmOptions | null>(null)
+  const isConfirmLoading = ref(false)
+
+  // 5. Tema
+  const theme = ref<ThemeName>('system')
+
+  // --- ACTIONS: MODAIS ---
+
+  function openModal(name: keyof ModalState) {
+    closeModal() 
+    modals.value[name] = true
     document.body.style.overflow = 'hidden'
   }
 
   function closeModal() {
-    activeModal.value = null
-    // Só libera o scroll se não houver um modal de confirmação por cima
-    if (!isConfirmModalOpen.value) {
-      document.body.style.overflow = ''
-    }
+    (Object.keys(modals.value) as Array<keyof ModalState>).forEach(key => {
+      modals.value[key] = false
+    })
+    document.body.style.overflow = ''
+    isRecoveryMode.value = false
   }
 
-  // --- Helpers Específicos (CORREÇÃO DE ERROS DE BUILD) ---
-  // Estes métodos conectam os componentes específicos às ações genéricas
-  const closeAuthModal = () => closeModal()
-  const closeDashboardModal = () => closeModal()
+  // --- ACTIONS ESPECÍFICAS (Helpers) ---
+  const openEvaluationModal = () => openModal('evaluation')
+  const openAdminModal = () => openModal('admin')
+  const openAuthModal = () => openModal('auth')
   
-  // Getters como funções para reatividade
-  const isAuthModalOpen = () => activeModal.value === 'auth'
-  const isDashboardModalOpen = () => activeModal.value === 'dashboard'
+  // REMOVIDOS: openRankingModal e openDashboardModal
 
-  // --- Tema ---
-  function applyTheme(newTheme: ThemeName) {
-    if (newTheme === 'system') {
-      localStorage.removeItem('theme')
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
-    } else {
-      localStorage.theme = newTheme
-      if (newTheme === 'dark') {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
+  // --- ACTIONS: TOASTS ---
+
+  function showToast(message: string, type: ToastType = 'info', duration = 4000) {
+    const id = toastIdCounter++
+    const toast: Toast = { id, message, type, duration }
+    
+    toasts.value.push(toast)
+
+    if (duration > 0) {
+      setTimeout(() => {
+        removeToast(id)
+      }, duration)
     }
-    theme.value = newTheme
   }
 
-  function toggleTheme() {
-    const next = theme.value === 'dark' ? 'light' : 'dark' // Simples toggle, ignora system para forçar a troca
-    applyTheme(next)
+  function removeToast(id: number) {
+    toasts.value = toasts.value.filter(t => t.id !== id)
   }
 
-  // --- Notificações ---
-  function removeNotification(id: number) {
-    notifications.value = notifications.value.filter(n => n.id !== id)
-  }
+  // --- ACTIONS: CONFIRMAÇÃO ---
 
-  function showToast(
-    message: string, 
-    type: 'success' | 'error' | 'info' = 'info', 
-    duration: number = 4000
-  ) {
-    const id = Date.now() + Math.random()
-    notifications.value.push({ id, message, type })
-    setTimeout(() => {
-      removeNotification(id)
-    }, duration)
-  }
-
-  // --- Confirmação ---
   function showConfirmModal(options: ConfirmOptions) {
-    confirmOptions.value = {
-      ...options,
-      okButtonText: options.okButtonText || 'Confirmar',
-      okButtonClass: options.okButtonClass || 'bg-green-600 hover:bg-green-700',
-    }
-    isConfirmModalOpen.value = true
-    document.body.style.overflow = 'hidden' 
-  }
-
-  function closeConfirmModal() {
-    isConfirmModalOpen.value = false
-    confirmOptions.value = null
-    // Se não tiver modal de fundo, libera scroll
-    if (activeModal.value === null) {
-      document.body.style.overflow = ''
-    }
+    confirmState.value = options
+    modals.value.confirm = true
+    document.body.style.overflow = 'hidden'
   }
 
   async function executeConfirm() {
-    if (confirmOptions.value && typeof confirmOptions.value.onConfirm === 'function') {
-      await confirmOptions.value.onConfirm()
+    if (confirmState.value?.onConfirm) {
+      isConfirmLoading.value = true
+      try {
+        await confirmState.value.onConfirm()
+      } finally {
+        isConfirmLoading.value = false
+        closeModal() 
+        confirmState.value = null
+      }
     }
-    closeConfirmModal()
+  }
+
+  // --- ACTIONS: TEMA ---
+
+  function applyTheme(newTheme: ThemeName) {
+    theme.value = newTheme
+    localStorage.setItem('theme', newTheme)
+
+    const isDark = 
+      newTheme === 'dark' || 
+      (newTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+    if (isDark) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }
+
+  function toggleTheme() {
+    const current = theme.value
+    const next = current === 'light' ? 'dark' : 'light'
+    applyTheme(next)
   }
 
   return {
     // State
-    activeModal,
+    modals,
     authModalMode,
-    theme,
-    notifications,
-    isConfirmModalOpen,
-    confirmOptions,
     isRecoveryMode,
-    
-    // Actions & Helpers
+    toasts,
+    confirmState,
+    isConfirmLoading,
+    theme,
+
+    // Actions Modais
     openModal,
     closeModal,
-    isAuthModalOpen,      // Novo
-    closeAuthModal,       // Novo
-    isDashboardModalOpen, // Novo
-    closeDashboardModal,  // Novo
-    
-    applyTheme,
-    toggleTheme,
+    openEvaluationModal,
+    openAdminModal,
+    openAuthModal,
+
+    // Actions Toasts
     showToast,
-    removeNotification,
+    removeToast,
+
+    // Actions Confirm
     showConfirmModal,
-    closeConfirmModal,
-    executeConfirm
+    executeConfirm,
+
+    // Actions Theme
+    applyTheme,
+    toggleTheme
   }
 })

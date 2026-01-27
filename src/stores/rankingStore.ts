@@ -4,19 +4,24 @@ import { supabaseClient } from '../lib/supabaseClient'
 import { exportToExcel } from '../lib/exportToExcel'
 import { useUiStore } from './uiStore'
 import { useEvaluationStore } from './evaluationStore'
+import { useAuthStore } from './authStore' // Importação estática geralmente funciona bem com Pinia
 
 export interface EvaluationResult {
   id: string
   score: number
   date: string
   evaluator: string
+  // Mapeamento do Supabase (pode vir como objeto ou null)
   sectors: { name: string } | null
-  sector?: string | null
-  setor_nome?: string 
-  data_formatada?: string
+  sector?: string | null // Legado
+  
+  // Propriedades processadas para o Front
+  setor_nome: string 
+  data_formatada: string
   deleted_at?: string | null
 }
 
+// Interface para exportação
 interface EvaluationExport {
   id: string
   score: number
@@ -26,16 +31,26 @@ interface EvaluationExport {
   sectors: { name: string } | null
   responsible: string | null
   observations: string | null
-  details: { [key: string]: string | number } | null
 }
 
 export const useRankingStore = defineStore('ranking', () => {
+  
+  // --- STATE ---
   const results = ref<EvaluationResult[]>([])
   const isLoading = ref(false)
+  
+  // Paginação e Filtros
   const filterText = ref('')
   const currentPage = ref(1)
   const totalPages = ref(1)
   const recordsPerPage = 10
+
+  // Stores
+  const uiStore = useUiStore()
+  const evaluationStore = useEvaluationStore()
+  const authStore = useAuthStore()
+
+  // --- ACTIONS ---
 
   async function fetchResults(page = 1, filter = '') {
     isLoading.value = true
@@ -44,21 +59,15 @@ export const useRankingStore = defineStore('ranking', () => {
 
     const from = (page - 1) * recordsPerPage
     
-    // --- DEBUG: Início da busca ---
-    console.log(`🔍 [DEBUG] Buscando Ranking. Página: ${page}, Filtro: "${filter}"`);
-
     try {
       let data: any[] | null = null
       let error: any = null
       let count: number | null = null
 
       if (!filter) {
+        // --- BUSCA PADRÃO (Sem filtro) ---
         const to = from + recordsPerPage - 1
-        const {
-          data: queryData,
-          error: queryError,
-          count: queryCount,
-        } = await supabaseClient
+        const query = supabaseClient
           .from('evaluations')
           .select(`
             id, 
@@ -70,53 +79,49 @@ export const useRankingStore = defineStore('ranking', () => {
             sectors ( name )
           `, { count: 'exact' })
           .is('deleted_at', null)
-          .order('score', { ascending: false })
+          .order('score', { ascending: false }) // Ranking = maior nota primeiro
           .range(from, to)
+        
+        const response = await query
+        data = response.data
+        error = response.error
+        count = response.count
 
-        data = queryData
-        error = queryError
-        count = queryCount
       } else {
-        const { data: rpcData, error: rpcError } = await supabaseClient.rpc(
+        // --- BUSCA COM FILTRO (Via RPC) ---
+        // A RPC deve lidar com busca em tabelas relacionadas (sectors.name)
+        const { data: rpcResponse, error: rpcError } = await supabaseClient.rpc(
           'search_evaluations',
           {
             search_term: filter,
             page_limit: recordsPerPage,
             page_offset: from,
-          },
+          }
         )
 
         if (rpcError) throw rpcError
 
-        data = rpcData.data
-        error = rpcError
-        count = rpcData.count
+        data = rpcResponse.data
+        error = null
+        count = rpcResponse.count
       }
 
-      if (error) {
-        console.error('❌ [DEBUG] Erro no Supabase:', error);
-        throw error
-      }
+      if (error) throw error
 
-      // --- DEBUG: Análise dos dados recebidos ---
-      if (data && data.length > 0) {
-        console.log('📦 [DEBUG] Primeiro item recebido (RAW):', data[0]);
-        console.log('👉 [DEBUG] Campo "sectors" (Relação):', data[0].sectors);
-        console.log('👉 [DEBUG] Campo "sector" (Texto Antigo):', data[0].sector);
-      } else {
-        console.warn('⚠️ [DEBUG] Nenhum dado encontrado.');
-      }
-      // ------------------------------------------
-
+      // Processamento e Normalização dos Dados
       if (data) {
         results.value = data.map((item: any) => {
-          // Lógica de Fallback
-          const nomeResolvido = item.sectors?.name || item.sector || 'Setor Desconhecido';
+          // Resolve nome do setor (Relação -> Legado -> Fallback)
+          const relationName = Array.isArray(item.sectors) ? item.sectors[0]?.name : item.sectors?.name
+          const nomeResolvido = relationName || item.sector || 'Setor Desconhecido'
 
           return {
             ...item,
             setor_nome: nomeResolvido,
-            data_formatada: item.date ? new Date(item.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'
+            // Formata data considerando UTC para não perder o dia
+            data_formatada: item.date 
+              ? new Date(item.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) 
+              : '-'
           }
         })
       } else {
@@ -124,19 +129,46 @@ export const useRankingStore = defineStore('ranking', () => {
       }
 
       totalPages.value = Math.ceil((count || 0) / recordsPerPage) || 1
+
     } catch (error) {
       console.error('Erro ao carregar ranking:', error)
+      uiStore.showToast('Erro ao carregar dados do ranking.', 'error')
       results.value = []
     } finally {
       isLoading.value = false
     }
   }
 
-  async function restoreEvaluation(id: string) {
-    const uiStore = useUiStore()
-    const { useAuthStore } = await import('./authStore')
-    const authStore = useAuthStore()
+  /**
+   * Prepara e abre o modal de edição
+   */
+  async function openEditModal(id: string) {
+    // 1. Verificação de Permissão
+    if (authStore.userRole !== 'admin') {
+      uiStore.showToast('Apenas administradores podem editar registros.', 'error')
+      return
+    }
 
+    try {
+      // 2. Carrega os dados na store de avaliação
+      await evaluationStore.fetchEvaluationForEdit(id)
+      
+      if (evaluationStore.dataToEdit) {
+        // 3. ABRE o modal de avaliação (Correção da lógica antiga)
+        uiStore.openEvaluationModal()
+      } else {
+        throw new Error('Avaliação não encontrada.')
+      }
+    } catch (error: any) {
+      console.error('Erro ao preparar edição:', error)
+      uiStore.showToast(error.message || 'Erro ao abrir edição.', 'error')
+    }
+  }
+
+  /**
+   * Restaura um registro deletado logicamente (soft delete)
+   */
+  async function restoreEvaluation(id: string) {
     if (authStore.userRole !== 'admin') {
       uiStore.showToast('Apenas administradores podem restaurar.', 'error')
       return
@@ -154,49 +186,27 @@ export const useRankingStore = defineStore('ranking', () => {
       await fetchResults(currentPage.value, filterText.value)
     } catch (error: any) {
       console.error('Erro ao restaurar:', error)
-      uiStore.showToast(error.message || 'Falha ao restaurar.', 'error')
+      uiStore.showToast('Falha ao restaurar registro.', 'error')
     }
   }
 
-  async function fetchEvaluationForEdit(id: string) {
-    const uiStore = useUiStore()
-    const evaluationStore = useEvaluationStore()
-    const { useAuthStore } = await import('./authStore')
-    const authStore = useAuthStore()
-
-    if (authStore.userRole !== 'admin') {
-      uiStore.showToast('Apenas administradores podem editar.', 'error')
-      return
-    }
-
-    try {
-      await evaluationStore.fetchEvaluationForEdit(id)
-      if (evaluationStore.dataToEdit) {
-        uiStore.closeModal()
-      } else {
-        throw new Error('Não foi possível carregar a avaliação.')
-      }
-    } catch (error: any) {
-      console.error('Erro ao buscar para editar:', error)
-      uiStore.showToast(error.message, 'error')
-    }
-  }
+  // --- EXPORTAÇÃO ---
 
   async function fetchAllResultsForExport(): Promise<EvaluationExport[]> {
+    // Usa a RPC para buscar tudo sem paginação (limite alto)
     const { data: rpcData, error: rpcError } = await supabaseClient.rpc(
       'search_evaluations',
-      { search_term: '', page_limit: 10000, page_offset: 0 },
+      { search_term: '', page_limit: 5000, page_offset: 0 },
     )
 
     if (rpcError) throw rpcError
-    return rpcData?.data || [] as EvaluationExport[]
+    return rpcData?.data || []
   }
 
   function formatDateForId(dateStr: string | null | undefined): string {
     if (!dateStr) return '00000000'
     const parts = dateStr.split('T')
-    const datePart = parts[0]
-    return datePart ? datePart.replace(/-/g, '') : '00000000'
+    return parts[0] ? parts[0].replace(/-/g, '') : '00000000'
   }
 
   function padId(id: string): string {
@@ -205,29 +215,37 @@ export const useRankingStore = defineStore('ranking', () => {
   }
 
   async function exportAllResults() {
-    const uiStore = useUiStore()
     isLoading.value = true
     try {
       const data = await fetchAllResultsForExport()
+      
       if (!data || data.length === 0) {
         throw new Error('Não há dados para exportar.')
       }
 
-      const formattedData = data.map((item) => ({
-        'ID (Ref)': `${formatDateForId(item.date)}-${padId(item.id)}`,
-        'Data': item.date ? new Date(item.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Data Inválida',
-        'Setor': item.sectors?.name || item.sector || 'Setor Desconhecido', 
-        'Pontuação': item.score,
-        'Avaliador': item.evaluator,
-        'Responsável': item.responsible ?? '',
-        'Observações': item.observations ?? '',
-      }))
+      // Mapeia para o formato "Legível" do Excel
+      const formattedData = data.map((item) => {
+        const relationName = (item.sectors as any)?.name || (item.sectors as any)
+        const setor = relationName || item.sector || 'Desconhecido'
+
+        return {
+          'Ref': `${formatDateForId(item.date)}-${padId(item.id)}`,
+          'Data': item.date ? new Date(item.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-',
+          'Setor': setor, 
+          'Nota': item.score,
+          'Avaliador': item.evaluator,
+          'Responsável': item.responsible ?? '',
+          'Observações': item.observations ?? '',
+        }
+      })
 
       const timestamp = new Date().toISOString().split('T')[0]
-      exportToExcel(formattedData, `Export_Klin_Avaliacoes_${timestamp}`)
-      uiStore.showToast('Exportação iniciada!', 'success')
+      exportToExcel(formattedData, `Klin_Ranking_5S_${timestamp}`)
+      
+      uiStore.showToast('Download iniciado!', 'success')
     } catch (error: any) {
-      uiStore.showToast(error.message, 'error')
+      console.error(error)
+      uiStore.showToast(error.message || 'Erro na exportação.', 'error')
     } finally {
       isLoading.value = false
     }
@@ -239,9 +257,10 @@ export const useRankingStore = defineStore('ranking', () => {
     filterText,
     currentPage,
     totalPages,
+    
     fetchResults,
+    openEditModal, // Renomeado de fetchEvaluationForEdit para ser mais semântico
     restoreEvaluation,
-    fetchEvaluationForEdit,
     exportAllResults,
   }
 })

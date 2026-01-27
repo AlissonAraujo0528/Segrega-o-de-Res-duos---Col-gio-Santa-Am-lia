@@ -2,23 +2,23 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
 
-// --- Tipos para o Dashboard ---
+// --- TIPOS ---
 
 export interface KpiData {
-  average_score: number      // Média geral (0 a 20)
-  total_evaluations: number  // Total de avaliações no mês
-  top_sector: string         // Melhor setor
+  average_score: number      // Média geral
+  total_evaluations: number  // Total de docs
+  top_sector: string         // Nome do melhor setor
 }
 
 export interface RankedSector {
-  sector_id: string          // UUID (String)
+  sector_id: string
   sector_name: string
   average: number
   count: number
 }
 
 export interface MedalData {
-  gold: RankedSector[]   
+  gold: RankedSector[] 
   silver: RankedSector[] 
   bronze: RankedSector[] 
 }
@@ -28,7 +28,6 @@ export interface Period {
   label: string // "Novembro de 2025"
 }
 
-// Interface para o item do histórico
 export interface HistoryItem {
   id: string
   created_at: string
@@ -38,15 +37,11 @@ export interface HistoryItem {
   issues: string[]
   foto_url?: string | null
   responsible_name?: string
-  // Adicionei 'setor_nome' plano para facilitar
-  setor_nome: string
-  // Mantemos a estrutura antiga para compatibilidade
-  setores?: {
-    name: string 
-  }
+  setor_nome: string // Propriedade unificada para a UI
 }
 
 export const useDashboardStore = defineStore('dashboard', () => {
+  
   // --- STATE ---
   const isLoading = ref(false)
   const error = ref<string | null>(null)
@@ -66,11 +61,17 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const availablePeriods = ref<Period[]>([])
   const recentEvaluations = ref<HistoryItem[]>([]) 
   
+  // --- HELPERS ---
+
+  // Gera datas UTC para garantir que pegamos o mês inteiro independente do fuso horário
+  function getUtcMonthRange(month: number, year: number) {
+    const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0)).toISOString()
+    const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)).toISOString()
+    return { start, end }
+  }
+
   // --- ACTIONS ---
 
-  /**
-   * Busca todos os meses que possuem avaliações registradas
-   */
   async function fetchAvailablePeriods() {
     try {
       const { data, error: err } = await supabaseClient
@@ -88,7 +89,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         const month = date.getMonth() + 1
         const key = `${year}-${month.toString().padStart(2, '0')}`
         
-        const monthName = date.toLocaleDateString('pt-BR', { month: 'long' })
+        const monthName = date.toLocaleDateString('pt-BR', { month: 'long', timeZone: 'UTC' })
         const label = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} de ${year}`
         
         if (!uniqueMap.has(key)) {
@@ -107,9 +108,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   }
 
-  /**
-   * Busca e calcula os dados KPIs para um mês/ano específico
-   */
   async function fetchDashboardData(month: number, year: number) {
     isLoading.value = true
     error.value = null
@@ -118,8 +116,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     medalLists.value = { gold: [], silver: [], bronze: [] }
 
     try {
-      const startDate = new Date(year, month - 1, 1).toISOString()
-      const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
+      const { start, end } = getUtcMonthRange(month, year)
 
       const { data, error: err } = await supabaseClient
         .from('evaluations') 
@@ -129,9 +126,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
           sector, 
           sectors ( name )
         `)
-        // Adicionamos 'sector' no select acima como fallback
-        .gte('created_at', startDate)
-        .lte('created_at', endDate)
+        .gte('created_at', start)
+        .lte('created_at', end)
 
       if (err) throw err
       if (!data || data.length === 0) return 
@@ -142,10 +138,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const sectorsMap = new Map<string, { name: string, totalScore: number, count: number }>()
 
       data.forEach((item: any) => {
-        const sId = item.sector_id || item.sector || 'unknown' // Tenta ID, se falhar tenta nome antigo
+        const sId = item.sector_id || item.sector || 'unknown'
         
-        // CORREÇÃO AQUI: Tenta relação nova -> tenta coluna velha -> default
-        const sName = item.sectors?.name || item.sector || 'Setor Desconhecido'
+        // Resolve nome com segurança
+        const relationName = Array.isArray(item.sectors) ? item.sectors[0]?.name : item.sectors?.name
+        const sName = relationName || item.sector || 'Setor Desconhecido'
+        
         const score = item.score || 0
 
         if (!sectorsMap.has(sId)) {
@@ -160,6 +158,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const rankedSectors: RankedSector[] = []
       
       sectorsMap.forEach((val, key) => {
+        if (key === 'unknown') return
         rankedSectors.push({
           sector_id: key,
           sector_name: val.name,
@@ -170,35 +169,35 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
       rankedSectors.sort((a, b) => b.average - a.average)
 
-      // Regras de Medalhas
       medalLists.value.gold = rankedSectors.filter(s => s.average >= 19)
       medalLists.value.silver = rankedSectors.filter(s => s.average >= 15 && s.average < 19)
       medalLists.value.bronze = rankedSectors.filter(s => s.average < 15)
 
+      // CORREÇÃO DO ERRO TS2532:
+      // Usamos `rankedSectors[0]?.sector_name` com optional chaining (?) 
+      // e Nullish Coalescing (??) para garantir que nunca seja nulo/undefined.
+      const topSectorName = rankedSectors.length > 0 ? (rankedSectors[0]?.sector_name ?? '-') : '-'
+
       kpis.value = {
         average_score: parseFloat((sumTotal / totalDocs).toFixed(1)),
         total_evaluations: totalDocs,
-        top_sector: rankedSectors.length > 0 ? (rankedSectors[0]?.sector_name ?? '-') : '-'
+        top_sector: topSectorName
       }
 
     } catch (err: any) {
-      console.error("Erro ao processar dashboard:", err)
-      error.value = err.message || "Erro desconhecido."
+      console.error("Erro no dashboard:", err)
+      error.value = "Erro ao carregar dados."
     } finally {
       isLoading.value = false
     }
   }
 
-  /**
-   * Busca o histórico detalhado para a aba de "Histórico"
-   */
   async function fetchRecentHistory(month: number, year: number) {
     isLoading.value = true
     recentEvaluations.value = [] 
     
     try {
-      const startDate = new Date(year, month - 1, 1).toISOString()
-      const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
+      const { start, end } = getUtcMonthRange(month, year)
 
       const { data, error: err } = await supabaseClient
         .from('evaluations') 
@@ -206,18 +205,18 @@ export const useDashboardStore = defineStore('dashboard', () => {
           id, created_at, score, observations, responsible, details, sector,
           sectors ( name )
         `)
-        .gte('created_at', startDate)
-        .lte('created_at', endDate)
+        .gte('created_at', start)
+        .lte('created_at', end)
         .order('created_at', { ascending: false })
 
       if (err) throw err
 
       recentEvaluations.value = (data || []).map((item: any) => {
-        let details: string[] = []
+        let issues: string[] = []
         let cleanObs = item.observations || '' 
 
-        try {
-          if (item.observations && item.observations.startsWith('{')) {
+        if (item.observations && item.observations.trim().startsWith('{')) {
+          try {
              const parts = item.observations.split('\n\n')
              const jsonPart = parts[0]
              cleanObs = parts.slice(1).join('\n')
@@ -229,16 +228,20 @@ export const useDashboardStore = defineStore('dashboard', () => {
                'outros': 'Outros Não Recicláveis',
                'nivel': 'Nível dos Coletores'
              }
+             
              Object.entries(parsed).forEach(([key, val]) => {
                if (String(val) === '2') {
-                 details.push(labels[key] || key)
+                 issues.push(labels[key] || key)
                }
              })
+          } catch (e) {
+             cleanObs = item.observations
           }
-        } catch (e) { }
+        }
         
-        // CORREÇÃO: Resolve o nome com prioridade
-        const nomeResolvido = item.sectors?.name || item.sector || 'Sem Nome';
+        // Resolve nome do setor com segurança
+        const relationName = Array.isArray(item.sectors) ? item.sectors[0]?.name : item.sectors?.name
+        const nomeResolvido = relationName || item.sector || 'Sem Nome'
 
         return {
           id: item.id,
@@ -246,22 +249,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
           nota: item.score,
           observacao: item.observations,
           cleanObservation: cleanObs,
-          issues: details,
+          issues: issues,
           foto_url: item.details?.photo_url || null,
           responsible_name: item.responsible,
-          
-          // Adicionamos propriedade plana
-          setor_nome: nomeResolvido, 
-          
-          // Mantemos estrutura antiga mas com dados garantidos
-          setores: {
-            name: nomeResolvido
-          }
+          setor_nome: nomeResolvido
         }
-      }) as unknown as HistoryItem[]
+      })
 
     } catch (err: any) {
-      console.error("Erro ao buscar histórico:", err)
+      console.error("Erro histórico:", err)
+      error.value = "Erro ao carregar histórico."
     } finally {
       isLoading.value = false
     }

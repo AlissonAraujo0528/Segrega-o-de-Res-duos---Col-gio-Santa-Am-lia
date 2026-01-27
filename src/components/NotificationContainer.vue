@@ -1,73 +1,77 @@
 <script setup lang="ts">
-import { useUiStore } from '../stores/uiStore'
+import { useUiStore, type ToastType } from '../stores/uiStore'
 
 const uiStore = useUiStore()
 
-function getTypeClasses(type: string) {
+function getStyles(type: ToastType) {
   switch (type) {
     case 'success':
-      return 'bg-success border-success/50 text-white'
+      return 'bg-green-600 dark:bg-green-700 text-white border-green-700'
     case 'error':
-      return 'bg-danger border-danger/50 text-white'
+      return 'bg-red-600 dark:bg-red-700 text-white border-red-700'
+    case 'warning':
+      return 'bg-yellow-500 dark:bg-yellow-600 text-white border-yellow-600'
+    case 'info':
     default:
-      return 'bg-primary-dark border-primary/50 text-white'
+      return 'bg-gray-800 dark:bg-gray-700 text-white border-gray-900'
   }
 }
 
-function getIconClass(type: string) {
+function getIcon(type: ToastType) {
   switch (type) {
-    case 'success':
-      return 'fa-solid fa-check-circle'
-    case 'error':
-      return 'fa-solid fa-exclamation-triangle'
-    default:
-      return 'fa-solid fa-info-circle'
+    case 'success': return 'fa-solid fa-check-circle'
+    case 'error': return 'fa-solid fa-triangle-exclamation'
+    case 'warning': return 'fa-solid fa-bell'
+    default: return 'fa-solid fa-info-circle'
   }
 }
 </script>
 
 <template>
-  <div class="fixed right-4 top-4 z-[9999] w-full max-w-sm space-y-3">
+  <div class="fixed right-0 top-0 z-[9999] flex w-full max-w-sm flex-col gap-2 p-4 pointer-events-none">
     
-    <transition-group name="fade">
-
+    <TransitionGroup name="toast">
       <div
-        v-for="notification in uiStore.notifications"
-        :key="notification.id"
-        :class="getTypeClasses(notification.type)"
-        class="flex w-full items-start gap-4 rounded-lg border-l-4 p-4 shadow-xl"
-        :role="notification.type === 'error' ? 'alert' : 'status'"
+        v-for="toast in uiStore.toasts"
+        :key="toast.id"
+        :class="getStyles(toast.type)"
+        class="pointer-events-auto flex items-start gap-3 rounded-lg p-4 shadow-xl border-l-4 transition-all"
+        role="alert"
       >
-        <div class="flex-shrink-0 pt-1 text-xl">
-          <i :class="getIconClass(notification.type)"></i>
+        <div class="flex-shrink-0 pt-0.5 text-lg">
+          <i :class="getIcon(toast.type)"></i>
         </div>
         
-        <div class="flex-1">
-          <p class="font-semibold">{{ notification.message }}</p>
+        <div class="flex-1 text-sm font-medium leading-tight">
+          {{ toast.message }}
         </div>
         
         <button
-          @click="uiStore.removeNotification(notification.id)"
-          class="flex-shrink-0 rounded-sm text-xl text-white/70 outline-none transition-all 
-                 hover:text-white
-                 focus-ring:ring-1 focus-ring:ring-white"
-          title="Fechar"
+          @click="uiStore.removeToast(toast.id)"
+          class="flex-shrink-0 text-white/70 hover:text-white transition-colors"
+          aria-label="Fechar notificação"
         >
-          &times;
+          <i class="fa-solid fa-times"></i>
         </button>
       </div>
-    </transition-group>
+    </TransitionGroup>
+
   </div>
-</template> 
+</template>
 
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease-out;
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.fade-enter-from,
-.fade-leave-to {
+
+.toast-enter-from {
   opacity: 0;
-  transform: translateX(100%);
+  transform: translateX(100%) scale(0.9);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.9);
 }
 </style>

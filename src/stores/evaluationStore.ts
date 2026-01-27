@@ -2,57 +2,70 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
 
-// --- Tipos (Alinhados com o Banco de Dados) ---
+// --- TIPOS ---
 
 export interface Sector {
-  id: string // UUID do banco (antes era number)
+  id: string 
   name: string
   default_responsible?: string | null
 }
 
-// Dados para envio do formulário
 export interface EvaluationFormPayload {
-  sector_id: string // UUID
+  sector_id: string
   responsible: string
-  score: number // nota (0-20)
-  weight: number // peso (0 se não usado)
+  score: number
+  weight: number
   observations?: string
-  image?: File | null // Arquivo para upload
+  image?: File | null
 }
 
-// Dados completos vindos do banco + campos auxiliares para o front
+// Interface completa do registro no banco
+export interface EvaluationRecord {
+  id: string
+  created_at: string
+  user_id: string
+  sector_id: string
+  responsible: string
+  score: number
+  observations?: string
+  details?: { photo_url?: string } | null // Campo JSONB para flexibilidade
+  date?: string
+  evaluator?: string
+}
+
+// Interface para edição (Front-end)
 export interface EvaluationFull extends EvaluationFormPayload {
   id: string
   user_id: string
   photo_url: string | null
   created_at: string
-  // Campos opcionais para compatibilidade com o formulário de edição
-  evaluator?: string 
   date?: string
+  evaluator?: string
 }
 
 export const useEvaluationStore = defineStore('evaluation', () => {
+  
   // --- STATE ---
   const loading = ref(false)
   const error = ref<string | null>(null)
   
-  // Controle de Edição
   const editingEvaluationId = ref<string | null>(null)
   const dataToEdit = ref<EvaluationFull | null>(null)
 
   // --- ACTIONS ---
 
   /**
-   * Busca setores pelo nome (usado no Combobox)
-   * CORREÇÃO: Usa tabela 'sectors' e coluna 'name'
+   * Busca setores para o Combobox
    */
   async function searchSectors(query: string): Promise<Sector[]> {
     try {
+      // Se a query for muito curta, retorna vazio para economizar banda
+      if (query.length < 1) return []
+
       const { data, error: err } = await supabaseClient
-        .from('sectors') // Tabela correta
-        .select('id, name, default_responsible') // Colunas corretas
-        .ilike('name', `%${query}%`) // Filtro na coluna correta
-        // .eq('ativo', true) // Removido pois não existe no script SQL atual
+        .from('sectors')
+        .select('id, name, default_responsible')
+        .ilike('name', `%${query}%`)
         .limit(10)
         .order('name')
 
@@ -65,12 +78,12 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   }
 
   /**
-   * Busca um setor pelo ID para pré-preencher em edições
+   * Busca setor por ID (para edição)
    */
   async function getSectorById(id: string): Promise<Sector | null> {
     try {
       const { data, error: err } = await supabaseClient
-        .from('sectors') // Tabela correta
+        .from('sectors')
         .select('id, name, default_responsible')
         .eq('id', id)
         .single()
@@ -83,63 +96,74 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   }
 
   /**
-   * Envia ou Atualiza uma avaliação (Com Upload de Imagem)
+   * Helper privado para upload de imagem
+   */
+  async function uploadEvidence(file: File, userId: string): Promise<string | null> {
+    try {
+      const fileExt = file.name.split('.').pop()
+      // Nome único: userID/timestamp.ext
+      const fileName = `${userId}/${Date.now()}.${fileExt}`
+      
+      const { error: uploadError } = await supabaseClient.storage
+        .from('evaluations')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data } = supabaseClient.storage
+        .from('evaluations')
+        .getPublicUrl(fileName)
+        
+      return data.publicUrl
+    } catch (e) {
+      console.error('Erro no upload:', e)
+      throw new Error('Falha ao enviar a foto. Tente novamente.')
+    }
+  }
+
+  /**
+   * Salvar Avaliação (Insert ou Update)
    */
   async function submitEvaluation(payload: EvaluationFormPayload) {
     loading.value = true
     error.value = null
     
     try {
-      // 1. Verificar Sessão DIRETAMENTE no Supabase
+      // 1. Auth Check
       const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-      
-      if (authError || !user) {
-        throw new Error('Sessão expirada. Por favor, faça login novamente.')
-      }
+      if (authError || !user) throw new Error('Sessão expirada.')
 
+      // 2. Upload (se houver nova imagem)
       let photoUrl = null
-
-      // 2. Upload da Imagem (se houver)
       if (payload.image) {
-        const fileExt = payload.image.name.split('.').pop()
-        const fileName = `${user.id}/${Date.now()}.${fileExt}`
-        
-        const { error: uploadError } = await supabaseClient.storage
-          .from('evaluations') // Bucket correto
-          .upload(fileName, payload.image)
-
-        if (uploadError) throw uploadError
-
-        // Pegar URL pública
-        const { data: publicData } = supabaseClient.storage
-          .from('evaluations')
-          .getPublicUrl(fileName)
-          
-        photoUrl = publicData.publicUrl
+        photoUrl = await uploadEvidence(payload.image, user.id)
       }
 
-      // 3. Montar objeto para salvar
-      // Mapeamento corrigido para bater com as colunas do SQL
+      // 3. Preparar Payload do Banco
+      // Se for edição e não teve upload novo, mantemos a URL antiga (se existir)
+      let finalPhotoUrl = photoUrl
+      if (!photoUrl && editingEvaluationId.value && dataToEdit.value?.photo_url) {
+        finalPhotoUrl = dataToEdit.value.photo_url
+      }
+
       const dbData = {
-        created_by: user.id, // Rastreabilidade
-        user_id: user.id,    // Legado ou redundância (depende do seu SQL final)
+        user_id: user.id, // Vínculo com auth.users
         sector_id: payload.sector_id,
-        responsible: payload.responsible, // Coluna 'responsible' (não 'responsible_name')
+        responsible: payload.responsible,
         score: payload.score,
-        observacao: payload.observations, // Coluna 'observacao' ou 'observations'? Seu SQL variou.
-                                          // Vou usar 'observations' que é mais padrão no seu SQL mais recente.
-                                          // Se der erro, troque para 'observacao'.
-        observations: payload.observations, 
+        observations: payload.observations,
+        date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+        evaluator: user.email?.split('@')[0] || 'Avaliador', // Fallback visual
         
-        // Campos obrigatórios no seu SQL:
-        date: new Date().toISOString().split('T')[0], 
-        evaluator: 'Usuário App', // Placeholder, idealmente viria do perfil
-        
-        ...(photoUrl ? { details: { photo_url: photoUrl } } : {}) // Salvando foto no JSON 'details' se não houver coluna dedicada
+        // Salva a URL da foto dentro do JSONB 'details' para flexibilidade
+        details: finalPhotoUrl ? { photo_url: finalPhotoUrl } : null
       }
       
       if (editingEvaluationId.value) {
-        // --- ATUALIZAÇÃO (UPDATE) ---
+        // --- UPDATE ---
         const { error: updateError } = await supabaseClient
           .from('evaluations')
           .update(dbData)
@@ -147,10 +171,12 @@ export const useEvaluationStore = defineStore('evaluation', () => {
           
         if (updateError) throw updateError
       } else {
-        // --- CRIAÇÃO (INSERT) ---
+        // --- INSERT ---
+        // Adiciona created_by apenas na criação (para log de auditoria imutável)
+        const insertData = { ...dbData, created_by: user.id }
         const { error: insertError } = await supabaseClient
           .from('evaluations')
-          .insert(dbData)
+          .insert(insertData)
 
         if (insertError) throw insertError
       }
@@ -159,8 +185,8 @@ export const useEvaluationStore = defineStore('evaluation', () => {
       return true
 
     } catch (e: any) {
-      console.error('Erro ao enviar avaliação:', e)
-      error.value = e.message || 'Falha ao salvar avaliação.'
+      console.error('Submit Error:', e)
+      error.value = e.message || 'Erro ao salvar avaliação.'
       return false
     } finally {
       loading.value = false
@@ -168,39 +194,45 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   }
 
   /**
-   * Prepara o store para editar um item existente
+   * Prepara edição
    */
   async function fetchEvaluationForEdit(id: string) {
     loading.value = true
+    error.value = null
+
     try {
       const { data, error: err } = await supabaseClient
         .from('evaluations')
-        .select(`*`) // Traz tudo para garantir
+        .select('*')
         .eq('id', id)
         .single()
 
       if (err) throw err
 
-      // Mapeia para o formato esperado pelo form
+      // Extração segura da URL da foto (pode estar no JSONB details ou coluna antiga)
+      const photoUrl = data.details?.photo_url || data.photo_url || null
+
       dataToEdit.value = {
         id: data.id,
         created_at: data.created_at,
-        date: data.date || '', 
-        evaluator: data.evaluator || '',
+        date: data.date,
+        evaluator: data.evaluator,
+        user_id: data.user_id,
         
         sector_id: data.sector_id,
         responsible: data.responsible,
         score: data.score,
-        weight: 0, // Campo removido do banco?
+        weight: 0,
         observations: data.observations,
-        photo_url: data.details?.photo_url || null, // Tenta pegar do JSON
-        user_id: data.created_by || data.user_id
-      } as EvaluationFull
+        image: null, // Input de arquivo começa vazio na edição
+        photo_url: photoUrl
+      }
 
       editingEvaluationId.value = id
 
-    } catch (err) {
-      console.error('Erro ao buscar avaliação:', err)
+    } catch (err: any) {
+      console.error('Erro fetch edit:', err)
+      error.value = "Erro ao carregar dados para edição."
       clearEditMode()
     } finally {
       loading.value = false
@@ -210,10 +242,11 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   function clearEditMode() {
     editingEvaluationId.value = null
     dataToEdit.value = null
+    error.value = null
   }
 
   /**
-   * Exclusão Lógica ou Física
+   * Deletar Avaliação Única
    */
   async function deleteEvaluation(id: string) {
     loading.value = true
@@ -226,7 +259,6 @@ export const useEvaluationStore = defineStore('evaluation', () => {
       if (err) throw err
       return true
     } catch (err: any) {
-      console.error('Erro ao excluir:', err)
       error.value = err.message
       return false
     } finally {
@@ -235,29 +267,27 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   }
 
   /**
-   * Limpar banco de dados (Ação Administrativa)
+   * Deletar TUDO (Admin)
    */
   async function deleteAllEvaluations() {
     loading.value = true
     try {
-       // Tenta usar a RPC segura se disponível
+       // Tenta RPC primeiro (mais seguro/rápido se configurado)
        const { error: rpcError } = await supabaseClient.rpc('delete_all_evaluations')
        
-       if (rpcError) {
-         // Fallback: Tenta deletar direto (vai falhar se não for admin via RLS)
-         console.warn('RPC falhou, tentando delete direto...', rpcError)
-         const { error: delError } = await supabaseClient
-           .from('evaluations')
-           .delete()
-           .neq('id', 0) // Delete all
-           
-         if (delError) throw delError
-       }
+       if (!rpcError) return true
+
+       // Fallback: Delete manual (depende de RLS permitir)
+       console.warn('Fallback delete...', rpcError)
+       const { error: delError } = await supabaseClient
+         .from('evaluations')
+         .delete()
+         .neq('id', '00000000-0000-0000-0000-000000000000') // UUID trick para "todos"
        
+       if (delError) throw delError
        return true
     } catch (err: any) {
-      console.error('Erro ao limpar banco:', err)
-      error.value = err.message
+      error.value = "Falha ao limpar banco de dados."
       return false
     } finally {
       loading.value = false
@@ -265,10 +295,13 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   }
 
   return {
+    // State
     loading,
     error,
     editingEvaluationId,
     dataToEdit,
+    
+    // Actions
     searchSectors,
     getSectorById,
     submitEvaluation,
