@@ -1,38 +1,36 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 
-// --- Importação das Views (Lazy Loading para performance) ---
-// O usuário só baixa o código dessas páginas quando realmente precisar
+// --- Importação das Views (Lazy Loading) ---
 const LoginView = () => import('../views/LoginView.vue')
 const DashboardView = () => import('../views/DashboardView.vue')
 const RankingView = () => import('../views/RankingView.vue')
 
 const router = createRouter({
-  history: createWebHistory(),
+  // MUDANÇA: createWebHashHistory resolve o erro 404 no GitHub Pages
+  // O base url garante que funcione em subpastas (ex: /seu-repositorio/)
+  history: createWebHashHistory(import.meta.env.BASE_URL),
+  
   routes: [
     {
-      path: '/login',
+      path: '/',
       name: 'login',
       component: LoginView,
-      meta: { public: true, layout: 'empty' } // Tela cheia, sem navbar
-    },
-    {
-      path: '/',
-      redirect: '/dashboard' // Home redireciona automaticamente para o painel
+      meta: { requiresAuth: false } // Página pública (Login)
     },
     {
       path: '/dashboard',
       name: 'dashboard',
       component: DashboardView,
-      meta: { public: false, layout: 'main' } // Requer login, usa MainLayout
+      meta: { requiresAuth: true } // Protegido
     },
     {
       path: '/ranking',
       name: 'ranking',
       component: RankingView,
-      meta: { public: false, layout: 'main' }
+      meta: { requiresAuth: true } // Protegido
     },
-    // Rota coringa: Se digitar qualquer coisa errada, vai pro dashboard
+    // Rota coringa: Se digitar qualquer coisa errada, volta pro inicio
     {
       path: '/:pathMatch(.*)*',
       redirect: '/'
@@ -40,28 +38,28 @@ const router = createRouter({
   ]
 })
 
-// --- GUARDA DE ROTAS (Segurança Profissional) ---
+// --- GUARDA DE ROTAS ---
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
-  // 1. Se o sistema acabou de abrir, espera o Supabase dizer se tem usuário
+  // 1. Inicializa autenticação se necessário (Reload da página)
   if (!authStore.isAuthReady) {
     await authStore.initialize()
   }
 
-  const isAuthenticated = !!authStore.user
+  const isAuthenticated = authStore.isAuthenticated
 
-  // 2. Regra: Se a rota NÃO é pública e o usuário NÃO tá logado
-  if (!to.meta.public && !isAuthenticated) {
+  // 2. Proteção: Se a rota requer auth e não está logado -> Login
+  if (to.meta.requiresAuth && !isAuthenticated) {
     return next({ name: 'login' })
   }
 
-  // 3. Regra: Se o usuário JÁ tá logado e tenta ir pro Login
+  // 3. Redirecionamento: Se já está logado e tenta ir pro Login -> Dashboard
   if (to.name === 'login' && isAuthenticated) {
     return next({ name: 'dashboard' })
   }
 
-  // 4. Tudo certo, segue o jogo
+  // 4. Segue o fluxo
   next()
 })
 

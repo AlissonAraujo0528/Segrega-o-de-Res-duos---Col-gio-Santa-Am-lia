@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import { useUiStore } from '../stores/uiStore'
+import { useUiStore } from '../stores/uiStore' 
 import { useDashboardStore } from '../stores/dashboardStore'
-import { exportToExcel } from '../lib/exportToExcel' 
+import { exportToExcel } from '../lib/exportToExcel'
 
 // Componentes UI
 import AppCard from '../components/ui/AppCard.vue'
-import AppButton from '../components/ui/AppButton.vue'
+import AppButton from '../components/ui/AppButton.vue' 
 
 // Chart.js imports
 import { Pie } from 'vue-chartjs'
@@ -34,9 +34,14 @@ onMounted(async () => {
   if (dashboardStore.availablePeriods.length > 0 && dashboardStore.availablePeriods[0]) {
     selectedPeriod.value = dashboardStore.availablePeriods[0].id
   }
+
+  // --- MELHORIA 2: Abre o modal automaticamente ---
+  setTimeout(() => {
+    uiStore.openEvaluationModal()
+  }, 500)
 })
 
-// Reatividade (Lógica Segura)
+// Reatividade (Lógica segura)
 watch([selectedPeriod, activeTab], async ([newPeriod, newTab]) => {
   if (newPeriod) {
     const parts = newPeriod.split('-')
@@ -55,24 +60,23 @@ watch([selectedPeriod, activeTab], async ([newPeriod, newTab]) => {
   }
 }, { immediate: true })
 
-// --- Lógica de Exportação ---
+// --- MELHORIA 1: Lógica de Exportação ---
 async function handleExport() {
   if (!selectedPeriod.value) return
 
-  // Se a lista de histórico estiver vazia (ex: usuário está na aba Visão Geral),
-  // precisamos buscar os dados antes de exportar.
+  // Se a lista estiver vazia (usuário na aba Visão Geral), busca os dados
   if (dashboardStore.recentEvaluations.length === 0) {
     const parts = selectedPeriod.value.split('-')
-    uiStore.showToast('Preparando dados para exportação...', 'info')
+    uiStore.showToast('Buscando dados...', 'info')
     await dashboardStore.fetchRecentHistory(Number(parts[1]), Number(parts[0]))
   }
 
   if (dashboardStore.recentEvaluations.length === 0) {
-    uiStore.showToast('Não há dados neste período para exportar.', 'warning')
+    uiStore.showToast('Sem dados para exportar.', 'warning')
     return
   }
 
-  // Mapeia para formato do Excel
+  // Formata para Excel
   const dataToExport = dashboardStore.recentEvaluations.map(item => ({
     'Data': formatDate(item.created_at),
     'Setor': item.setor_nome,
@@ -176,7 +180,7 @@ const formatDate = (dateStr?: string) => {
           @click="handleExport" 
           variant="secondary"
           icon="fa-solid fa-file-excel"
-          class="w-full sm:w-auto"
+          class="w-full sm:w-auto shadow-sm"
           title="Baixar planilha deste mês"
         >
           Excel
