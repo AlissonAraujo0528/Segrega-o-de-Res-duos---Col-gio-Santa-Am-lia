@@ -15,8 +15,11 @@ export interface EvaluationResult {
   sectors: { name: string } | null
   // Coluna antiga (texto) para fallback
   sector?: string | null
-  // Campo calculado para facilitar o display no Vue
+  
+  // --- CAMPOS CALCULADOS (PARA O FRONTEND) ---
   setor_nome?: string 
+  data_formatada?: string // <--- ADICIONADO PARA CORRIGIR O ERRO TS2339
+  
   deleted_at?: string | null
 }
 
@@ -50,15 +53,18 @@ export const useRankingStore = defineStore('ranking', () => {
     filterText.value = filter
 
     const from = (page - 1) * recordsPerPage
-    const to = from + recordsPerPage - 1
-
+    
+    // NOTA: Para paginação manual sem range(), o cálculo do offset é diferente se usar RPC,
+    // mas sua RPC usa LIMIT/OFFSET, então 'from' é o offset.
+    
     try {
       let data: any[] | null = null
       let error: any = null
       let count: number | null = null
 
       if (!filter) {
-        // --- LÓGICA (Sem filtro) ---
+        // --- LÓGICA (Sem filtro - Busca Padrão) ---
+        const to = from + recordsPerPage - 1
         const {
           data: queryData,
           error: queryError,
@@ -94,6 +100,7 @@ export const useRankingStore = defineStore('ranking', () => {
 
         if (rpcError) throw rpcError
 
+        // A RPC retorna { data: [...], count: N }
         data = rpcData.data
         error = rpcError
         count = rpcData.count
@@ -101,10 +108,10 @@ export const useRankingStore = defineStore('ranking', () => {
 
       if (error) throw error
 
-      // === CORREÇÃO: Processamento dos dados para garantir que o nome apareça ===
+      // === PROCESSAMENTO DOS DADOS (Popula a interface) ===
       if (data) {
         results.value = data.map((item: any) => {
-          // Lógica de Fallback:
+          // Lógica de Fallback de Nome:
           // 1. Tenta o nome da nova relação (sectors.name)
           // 2. Se falhar, tenta o nome da coluna antiga (item.sector)
           // 3. Se tudo falhar, exibe 'Setor Desconhecido'
@@ -113,7 +120,7 @@ export const useRankingStore = defineStore('ranking', () => {
           return {
             ...item,
             setor_nome: nomeResolvido,
-            // Garante formatação de data para evitar erros visuais
+            // Cria o campo data_formatada que a interface agora reconhece
             data_formatada: item.date ? new Date(item.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'
           }
         })
@@ -186,10 +193,9 @@ export const useRankingStore = defineStore('ranking', () => {
   }
 
   async function fetchAllResultsForExport(): Promise<EvaluationExport[]> {
-    // Busca tudo para exportação
-    // Adicionamos 'sector' (coluna antiga) no select caso não esteja usando RPC aqui
-    // Mas como está usando RPC 'search_evaluations', ela precisa retornar 'sector' se quisermos fallback
-    // Por segurança, assumimos que a RPC retorna o objeto sectors corretamente preenchido.
+    // Para exportação segura, usamos a RPC sem filtro e com limite alto
+    // Se a RPC não estiver disponível ou falhar, fallback para select padrão pode ser necessário,
+    // mas assumindo que search_evaluations existe:
     const { data: rpcData, error: rpcError } = await supabaseClient.rpc(
       'search_evaluations',
       {
