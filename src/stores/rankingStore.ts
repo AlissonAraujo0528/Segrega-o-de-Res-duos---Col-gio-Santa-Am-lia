@@ -5,18 +5,18 @@ import { exportToExcel } from '../lib/exportToExcel'
 import { useUiStore } from './uiStore'
 import { useEvaluationStore } from './evaluationStore'
 
-// Tipos de dados
+// Tipos de dados alinhados com o Banco de Dados (Inglês)
 export interface EvaluationResult {
-  id: string
+  id: string // UUID
   score: number
   date: string
   evaluator: string
-  sectors: { name: string } | null
+  // Relação correta com a tabela 'sectors'
+  sectors: { name: string } | null 
   deleted_at?: string | null
 }
 
 // Tipo para a consulta completa de exportação
-// ✅ CORREÇÃO: Permite que campos de texto sejam nulos
 interface EvaluationExport {
   id: string
   score: number
@@ -54,16 +54,23 @@ export const useRankingStore = defineStore('ranking', () => {
 
       if (!filter) {
         // --- LÓGICA (Sem filtro) ---
+        // Busca na tabela 'evaluations' e faz join com 'sectors'
+        // IMPORTANTE: Trazemos apenas 'name' da relação para evitar overhead e erros
         const {
           data: queryData,
           error: queryError,
           count: queryCount,
         } = await supabaseClient
           .from('evaluations')
-          .select('id, score, date, evaluator, deleted_at, sectors(*)', {
-            count: 'exact',
-          })
-          .is('deleted_at', null)
+          .select(`
+            id, 
+            score, 
+            date, 
+            evaluator, 
+            deleted_at, 
+            sectors ( name )
+          `, { count: 'exact' })
+          .is('deleted_at', null) // Filtra excluídos
           .order('score', { ascending: false })
           .range(from, to)
 
@@ -72,6 +79,7 @@ export const useRankingStore = defineStore('ranking', () => {
         count = queryCount
       } else {
         // --- LÓGICA (Com filtro) ---
+        // Usa a RPC 'search_evaluations' (que deve estar atualizada no banco)
         const { data: rpcData, error: rpcError } = await supabaseClient.rpc(
           'search_evaluations',
           {
@@ -83,6 +91,7 @@ export const useRankingStore = defineStore('ranking', () => {
 
         if (rpcError) throw rpcError
 
+        // A RPC retorna { data: [...], count: N }
         data = rpcData.data
         error = rpcError
         count = rpcData.count
@@ -119,7 +128,7 @@ export const useRankingStore = defineStore('ranking', () => {
       if (error) throw error
 
       uiStore.showToast('Registro restaurado com sucesso!', 'success')
-      // Atualiza a lista (o item sumirá da lixeira)
+      // Atualiza a lista
       await fetchResults(currentPage.value, filterText.value)
     } catch (error: any) {
       console.error('Erro ao restaurar:', error)
@@ -142,15 +151,11 @@ export const useRankingStore = defineStore('ranking', () => {
     }
 
     try {
-      // 1. Delega a busca dos dados para a evaluationStore
       await evaluationStore.fetchEvaluationForEdit(id)
 
-      // 2. Se a busca foi bem-sucedida...
       if (evaluationStore.dataToEdit) {
-        // 3. Fecha o modal de ranking para o usuário ver o formulário
-        uiStore.closeModal()
+        uiStore.closeModal() // Fecha o modal de ranking
       } else {
-        // Se não encontrou dados, mostra um erro
         throw new Error('Não foi possível carregar a avaliação para edição.')
       }
     } catch (error: any) {
@@ -160,6 +165,7 @@ export const useRankingStore = defineStore('ranking', () => {
   }
 
   async function fetchAllResultsForExport(): Promise<EvaluationExport[]> {
+    // Busca tudo para exportação (pode ser pesado, cuidado em produção real)
     const { data: rpcData, error: rpcError } = await supabaseClient.rpc(
       'search_evaluations',
       {
@@ -175,33 +181,23 @@ export const useRankingStore = defineStore('ranking', () => {
     return rpcData.data as EvaluationExport[]
   }
 
-  // --- INÍCIO DAS FUNÇÕES AUXILIARES PARA A MÁSCARA DE ID ---
+  // --- FUNÇÕES AUXILIARES DE EXPORTAÇÃO ---
 
   function formatDateForId(dateStr: string | null | undefined): string {
-    // Garante que é uma string e não está vazia
-    if (!dateStr) {
-      return '00000000' // Retorna um padrão caso a data seja nula/undefined/vazia
-    }
-
+    if (!dateStr) return '00000000'
     const parts = dateStr.split('T')
-
     const datePart = parts[0]
-    if (datePart) {
-      return datePart.replace(/-/g, '')
-    }
-
-    return '00000000'
+    return datePart ? datePart.replace(/-/g, '') : '00000000'
   }
 
   /**
-   * Preenche um ID numérico com zeros à esquerda até ter 6 dígitos.
-   * (ex: 60 -> "000060")
+   * Adapta o ID para exibição (UUID é longo, pegamos os últimos 6 chars para brevidade)
    */
-  function padId(id: number | string): string {
-    return id.toString().padStart(6, '0')
+  function padId(id: string): string {
+    if (!id) return '000000'
+    // Se for UUID, pega os ultimos 6 caracteres para não quebrar o Excel
+    return id.slice(-6).toUpperCase()
   }
-
-  // --- FIM DAS FUNÇÕES AUXILIARES ---
 
   async function exportAllResults() {
     const uiStore = useUiStore()
@@ -213,22 +209,20 @@ export const useRankingStore = defineStore('ranking', () => {
       }
 
       const formattedData = data.map((item) => ({
-        // Aqui criamos a máscara: YYYYMMDD-XXXXXX
-        'ID (Avaliação)': `${formatDateForId(item.date)}-${padId(item.id)}`,
-
-        // Lida com data nula também para a coluna 'Data'
+        'ID (Ref)': `${formatDateForId(item.date)}-${padId(item.id)}`,
         'Data': item.date
           ? new Date(item.date).toLocaleDateString('pt-BR', {
               timeZone: 'UTC',
             })
           : 'Data Inválida',
 
+        // CORREÇÃO: Acesso correto ao nome do setor
         'Setor': item.sectors ? item.sectors.name : 'N/A',
 
         'Pontuação': item.score,
         'Avaliador': item.evaluator,
         'Responsável': item.responsible ?? '',
-        'Observações': item.observations ?? '', // Adicionado '?? ''' para segurança
+        'Observações': item.observations ?? '',
       }))
 
       const timestamp = new Date().toISOString().split('T')[0]
