@@ -121,9 +121,12 @@ function handleExport() {
           <tr v-for="(item, index) in rankingStore.results" :key="item.id" class="hover:bg-tertiary">
     
             <td class="p-4 text-text-secondary">{{ (rankingStore.currentPage - 1) * 10 + index + 1 }}º</td>
-            <td class="p-4 text-text-secondary">{{ item.sectors?.name || 'Setor Inválido' }}</td>
+            
+            <td class="p-4 text-text-secondary font-medium">{{ item.setor_nome }}</td>
+            
             <td class="p-4 text-text-secondary">{{ item.score }}</td>
-            <td class="p-4 text-text-secondary">{{ new Date(item.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) }}</td>
+            
+            <td class="p-4 text-text-secondary">{{ item.data_formatada }}</td>
             
             <td class="p-4 text-text-secondary">{{ item.evaluator }}</td>
             

@@ -278,7 +278,7 @@ const formatDate = (dateStr?: string) => {
           <div class="flex justify-between items-start mb-2">
             <div>
               <h4 class="font-bold text-lg text-gray-800 flex items-center gap-2">
-                {{ item.setores?.name }}
+                {{ item.setor_nome || item.setores?.name || 'Setor Desconhecido' }}
                 <span v-if="item.nota === 20" class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200">Perfeito</span>
               </h4>
               <div class="flex gap-3 text-xs text-gray-500 mt-1">
