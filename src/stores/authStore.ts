@@ -3,46 +3,31 @@ import { ref, computed } from 'vue'
 import { supabaseClient } from '../lib/supabaseClient'
 import { useUiStore } from './uiStore'
 
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutos
+// Tempo limite de inatividade (15 minutos)
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000
 
 export const useAuthStore = defineStore('auth', () => {
+  // --- STATE ---
   const user = ref<any>(null)
-  const userRole = ref<string>('user') // Padrão seguro para evitar null
-  const loading = ref(true)
-  const inactivityTimer = ref<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const userRole = ref<string>('user')
+  const loading = ref(true) // Controla o loading inicial da aplicação
+  const sessionTimer = ref<any>(null) // Timer para controlar a inatividade
   
+  // Acesso à store de UI para abrir modais/toasts
   const uiStore = useUiStore()
 
-  // Getters
+  // --- GETTERS ---
+  // isAuthReady: Verdadeiro quando o Supabase já respondeu se tem usuário ou não
   const isAuthReady = computed(() => !loading.value)
+  // isAuthenticated: Verdadeiro se temos um objeto de usuário válido
   const isAuthenticated = computed(() => !!user.value)
 
-  // --- FUNÇÕES DE INATIVIDADE ---
-  function logoutDueToInactivity() {
-    uiStore.showToast('Você foi desconectado por inatividade.', 'info')
-    handleLogout()
-  }
+  // --- ACTIONS INTERNAS ---
 
-  function resetInactivityTimer() {
-    clearTimeout(inactivityTimer.value)
-    if (user.value) {
-      inactivityTimer.value = setTimeout(logoutDueToInactivity, INACTIVITY_TIMEOUT_MS)
-    }
-  }
-
-  function startInactivityTimer() {
-    const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart']
-    activityEvents.forEach(event => document.addEventListener(event, resetInactivityTimer))
-    resetInactivityTimer()
-  }
-
-  function stopInactivityTimer() {
-    clearTimeout(inactivityTimer.value)
-    const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart']
-    activityEvents.forEach(event => document.removeEventListener(event, resetInactivityTimer))
-  }
-
-  // --- CORE: Busca de Role Blindada ---
+  /**
+   * Busca a Role (papel) do usuário na tabela 'profiles'.
+   * Se falhar, assume 'user' por segurança.
+   */
   async function fetchUserRole(userId: string) {
     try {
       const { data, error } = await supabaseClient
@@ -51,51 +36,90 @@ export const useAuthStore = defineStore('auth', () => {
         .eq('id', userId)
         .single()
       
-      if (error) throw error
-      if (data) userRole.value = data.role
-
+      if (!error && data) {
+        userRole.value = data.role
+      }
     } catch (e) {
-      console.warn('Não foi possível buscar a role no banco. Usando "user" como fallback.', e)
-      userRole.value = 'user' // Fallback para não travar o login
+      console.warn('Erro ao buscar role. Usando fallback "user".', e)
+      userRole.value = 'user'
     }
   }
 
-  // --- INIT ---
-  async function init() {
+  /**
+   * Inicia ou reinicia o timer de inatividade.
+   * Chamado quando o usuário interage com o sistema.
+   */
+  function startInactivityTimer() {
+    clearTimeout(sessionTimer.value)
+    if (user.value) {
+      sessionTimer.value = setTimeout(() => {
+        console.log('Sessão expirada por inatividade.')
+        uiStore.showToast('Sessão expirada por inatividade.', 'info')
+        signOut() // Logout forçado
+      }, INACTIVITY_TIMEOUT_MS)
+    }
+  }
+
+  /**
+   * Função pública para resetar o timer (usada pelo Layout/App.vue nos eventos de mouse)
+   */
+  function resetTimer() {
+    if (user.value) startInactivityTimer()
+  }
+
+  // --- ACTIONS PÚBLICAS (usadas pelos componentes) ---
+
+  /**
+   * Inicializa a autenticação. Chamado pelo Router ou App.vue no mount.
+   */
+  async function initialize() {
     loading.value = true
     
-    // Verifica recuperação na URL
+    // 1. Verifica se é um fluxo de recuperação de senha
     if (window.location.hash && window.location.hash.includes('type=recovery')) {
-       uiStore.authModalMode = 'update_password'
-       uiStore.openModal('auth')
+       // Se você usa modal, pode abrir aqui. 
+       // Se migrou para Views, o próprio LoginView pode tratar isso.
+       uiStore.openModal('auth') // Fallback para garantir
     }
 
-    const { data } = await supabaseClient.auth.getSession()
-    if (data.session?.user) {
-      user.value = data.session.user
-      // Não usamos await aqui para não bloquear a renderização inicial
-      fetchUserRole(user.value.id)
-      startInactivityTimer()
+    try {
+      // 2. Pega a sessão atual
+      const { data } = await supabaseClient.auth.getSession()
+      
+      if (data.session?.user) {
+        user.value = data.session.user
+        // Busca role sem await para não travar a UI inicial
+        fetchUserRole(user.value.id)
+        startInactivityTimer()
+      } else {
+        user.value = null
+        userRole.value = 'user'
+      }
+    } catch (error) {
+      console.error('Erro na inicialização do Auth:', error)
+    } finally {
+      loading.value = false // Libera o app para renderizar
     }
-    loading.value = false
 
+    // 3. Configura o listener para mudanças futuras de estado
     supabaseClient.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
-         uiStore.authModalMode = 'update_password'
-         uiStore.openModal('auth')
+         // Lógica de recuperação
       } else if (event === 'SIGNED_IN' && session?.user) {
         user.value = session.user
-        fetchUserRole(session.user.id)
+        await fetchUserRole(session.user.id)
         startInactivityTimer()
       } else if (event === 'SIGNED_OUT') {
         user.value = null
         userRole.value = 'user'
-        stopInactivityTimer()
+        clearTimeout(sessionTimer.value)
       }
     })
   }
 
-  // --- LOGIN ---
+  /**
+   * Realiza o Login com Email e Senha
+   */
   async function handleLogin(email: string, pass: string): Promise<boolean> {
     try {
       const { data, error } = await supabaseClient.auth.signInWithPassword({
@@ -105,56 +129,75 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (error) throw error
       
-      // Se chegou aqui, logou.
       if (data.user) {
         user.value = data.user
-        // Tentativa "Best Effort" de pegar a role
-        fetchUserRole(data.user.id) 
+        await fetchUserRole(data.user.id)
+        startInactivityTimer()
+        return true
       }
-      
-      return true // Retorna true para o Modal fazer o reload
-
+      return false
     } catch (e: any) {
       console.error('Login error:', e.message)
       return false
     }
   }
 
-  async function handleLogout() {
-    await supabaseClient.auth.signOut()
-    user.value = null
-    userRole.value = 'user'
-    stopInactivityTimer()
-    uiStore.authModalMode = 'login'
+  /**
+   * Realiza o Logout seguro
+   */
+  async function signOut() {
+    try {
+      await supabaseClient.auth.signOut()
+    } catch (error) {
+      console.error('Erro ao sair do Supabase:', error)
+    } finally {
+      // Limpeza agressiva de estado
+      user.value = null
+      userRole.value = 'user'
+      clearTimeout(sessionTimer.value)
+      
+      // Redireciona para login recarregando a página para limpar memória
+      window.location.href = '/' 
+    }
   }
 
+  /**
+   * Envia e-mail de recuperação de senha
+   */
   async function handleForgotPassword(email: string) {
     const redirectTo = window.location.origin
     return await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo })
   }
   
+  /**
+   * Completa o fluxo de recuperação de senha (após clicar no link do email)
+   */
   async function completePasswordRecovery() {
     window.history.replaceState({}, document.title, window.location.pathname)
     const { data } = await supabaseClient.auth.getSession()
     if (data.session?.user) {
         user.value = data.session.user
-        fetchUserRole(data.session.user.id)
-        uiStore.closeModal()
-        uiStore.showToast('Senha recuperada!', 'success')
+        await fetchUserRole(data.session.user.id)
+        uiStore.closeModal() // Fecha modal se estiver aberto
+        uiStore.showToast('Senha recuperada e logado com sucesso!', 'success')
         startInactivityTimer()
     }
   }
 
   return {
+    // State & Getters
     user,
     userRole, 
     loading,
     isAuthReady,
     isAuthenticated,
-    init,
+    
+    // Actions
+    initialize,      // Renomeado de init -> initialize para bater com o Router
     handleLogin,
-    handleLogout,
+    signOut,         // Renomeado de handleLogout -> signOut (padrão mais comum)
     handleForgotPassword,
-    completePasswordRecovery
+    completePasswordRecovery,
+    resetTimer
   }
 })
