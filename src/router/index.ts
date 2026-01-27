@@ -5,10 +5,10 @@ import { useAuthStore } from '../stores/authStore'
 const LoginView = () => import('../views/LoginView.vue')
 const DashboardView = () => import('../views/DashboardView.vue')
 const RankingView = () => import('../views/RankingView.vue')
+const EvaluationView = () => import('../views/EvaluationView.vue')
 
 const router = createRouter({
-  // MUDANÇA: createWebHashHistory resolve o erro 404 no GitHub Pages
-  // O base url garante que funcione em subpastas (ex: /seu-repositorio/)
+  // createWebHashHistory é vital para o GitHub Pages (evita erro 404)
   history: createWebHashHistory(import.meta.env.BASE_URL),
   
   routes: [
@@ -16,21 +16,27 @@ const router = createRouter({
       path: '/',
       name: 'login',
       component: LoginView,
-      meta: { requiresAuth: false } // Página pública (Login)
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/evaluation',
+      name: 'evaluation',
+      component: EvaluationView,
+      meta: { requiresAuth: true }
     },
     {
       path: '/dashboard',
       name: 'dashboard',
       component: DashboardView,
-      meta: { requiresAuth: true } // Protegido
+      meta: { requiresAuth: true }
     },
     {
       path: '/ranking',
       name: 'ranking',
       component: RankingView,
-      meta: { requiresAuth: true } // Protegido
+      meta: { requiresAuth: true }
     },
-    // Rota coringa: Se digitar qualquer coisa errada, volta pro inicio
+    // Rota coringa
     {
       path: '/:pathMatch(.*)*',
       redirect: '/'
@@ -42,24 +48,23 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
-  // 1. Inicializa autenticação se necessário (Reload da página)
+  // 1. Garante que o estado de auth foi carregado
   if (!authStore.isAuthReady) {
     await authStore.initialize()
   }
 
   const isAuthenticated = authStore.isAuthenticated
 
-  // 2. Proteção: Se a rota requer auth e não está logado -> Login
+  // 2. Protege rotas privadas
   if (to.meta.requiresAuth && !isAuthenticated) {
     return next({ name: 'login' })
   }
 
-  // 3. Redirecionamento: Se já está logado e tenta ir pro Login -> Dashboard
+  // 3. Redireciona usuário logado para a AVALIAÇÃO (Home)
   if (to.name === 'login' && isAuthenticated) {
-    return next({ name: 'dashboard' })
+    return next({ name: 'evaluation' }) // <--- MUDANÇA DE FLUXO
   }
 
-  // 4. Segue o fluxo
   next()
 })
 
