@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, reactive } from 'vue'
-import { useRouter } from 'vue-router' // <--- Importante para navegação
+import { useRouter } from 'vue-router'
 import { useEvaluationStore, type EvaluationFormPayload } from '../stores/evaluationStore'
 import { useUiStore } from '../stores/uiStore'
-import { useAuthStore } from '../stores/authStore' // <--- Importante para checar permissão de Admin
+import { useAuthStore } from '../stores/authStore'
 import AppButton from './ui/AppButton.vue'
 import ComboboxSetor from './ComboboxSetor.vue'
 
@@ -11,6 +11,10 @@ const router = useRouter()
 const evaluationStore = useEvaluationStore()
 const uiStore = useUiStore()
 const authStore = useAuthStore()
+
+// --- Definição de Classes CSS (Para evitar erro de @apply) ---
+// Isso substitui o .input-base que estava causando erro no build
+const inputClass = "w-full rounded-lg border border-gray-300 dark:border-gray-600 p-2.5 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
 
 // --- Estado do Formulário ---
 const form = reactive({
@@ -74,10 +78,9 @@ function close() {
   resetForm()
 }
 
-// Navegação rápida (Substitui os antigos modais)
 function navigateTo(path: string) {
-  close() // Fecha este modal
-  router.push(path) // Vai para a página
+  close()
+  router.push(path)
 }
 
 function resetForm() {
@@ -154,12 +157,12 @@ async function handleSubmit() {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-1">
               <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Avaliador</label>
-              <input v-model="form.evaluator" type="text" required class="input-base" placeholder="Seu nome" />
+              <input v-model="form.evaluator" type="text" required :class="inputClass" placeholder="Seu nome" />
             </div>
             
             <div class="space-y-1">
               <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Data</label>
-              <input v-model="form.date" type="date" :max="today" required class="input-base" />
+              <input v-model="form.date" type="date" :max="today" required :class="inputClass" />
             </div>
             
             <div class="space-y-1">
@@ -168,7 +171,7 @@ async function handleSubmit() {
             
             <div class="space-y-1">
               <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Responsável</label>
-              <input v-model="form.responsible" type="text" required class="input-base bg-gray-50 dark:bg-gray-700" />
+              <input v-model="form.responsible" type="text" required :class="inputClass" class="bg-gray-50 dark:bg-gray-700" />
             </div>
           </div>
 
@@ -232,7 +235,7 @@ async function handleSubmit() {
 
           <div class="space-y-1">
              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Observações</label>
-             <textarea v-model="form.observations" rows="3" class="input-base resize-none" placeholder="Detalhes adicionais..."></textarea>
+             <textarea v-model="form.observations" rows="3" :class="inputClass" class="resize-none" placeholder="Detalhes adicionais..."></textarea>
           </div>
 
         </form>
@@ -271,10 +274,6 @@ async function handleSubmit() {
 </template>
 
 <style scoped>
-.input-base {
-  @apply w-full rounded-lg border border-gray-300 dark:border-gray-600 p-2.5 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all;
-}
-
 .scrollbar-thin::-webkit-scrollbar { width: 6px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
