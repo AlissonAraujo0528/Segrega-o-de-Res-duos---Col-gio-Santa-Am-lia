@@ -4,15 +4,15 @@ import { supabaseClient } from '../lib/supabaseClient'
 import { exportToExcel } from '../lib/exportToExcel'
 import { useUiStore } from './uiStore'
 import { useEvaluationStore } from './evaluationStore'
-import { useAuthStore } from './authStore' // Importação estática geralmente funciona bem com Pinia
+import { useAuthStore } from './authStore'
 
 export interface EvaluationResult {
   id: string
   score: number
   date: string
   evaluator: string
-  // Mapeamento do Supabase (pode vir como objeto ou null)
-  sectors: { name: string } | null
+  // Mapeamento do Supabase (pode vir como objeto, array ou null)
+  sectors: any 
   sector?: string | null // Legado
   
   // Propriedades processadas para o Front
@@ -28,7 +28,8 @@ interface EvaluationExport {
   date: string | null
   evaluator: string
   sector?: string | null
-  sectors: { name: string } | null
+  // CORREÇÃO: Aceita any para lidar com Array ou Objeto vindo do Supabase
+  sectors: any 
   responsible: string | null
   observations: string | null
 }
@@ -79,7 +80,7 @@ export const useRankingStore = defineStore('ranking', () => {
             sectors ( name )
           `, { count: 'exact' })
           .is('deleted_at', null)
-          .order('score', { ascending: false }) // Ranking = maior nota primeiro
+          .order('date', { ascending: false }) // CORREÇÃO: Ordenar por Data (mais recente)
           .range(from, to)
         
         const response = await query
@@ -89,7 +90,6 @@ export const useRankingStore = defineStore('ranking', () => {
 
       } else {
         // --- BUSCA COM FILTRO (Via RPC) ---
-        // A RPC deve lidar com busca em tabelas relacionadas (sectors.name)
         const { data: rpcResponse, error: rpcError } = await supabaseClient.rpc(
           'search_evaluations',
           {
@@ -112,7 +112,16 @@ export const useRankingStore = defineStore('ranking', () => {
       if (data) {
         results.value = data.map((item: any) => {
           // Resolve nome do setor (Relação -> Legado -> Fallback)
-          const relationName = Array.isArray(item.sectors) ? item.sectors[0]?.name : item.sectors?.name
+          // Lida com caso de ser array ou objeto
+          const sectorData = item.sectors
+          let relationName = ''
+          
+          if (Array.isArray(sectorData) && sectorData.length > 0) {
+             relationName = sectorData[0].name
+          } else if (sectorData && typeof sectorData === 'object') {
+             relationName = sectorData.name
+          }
+
           const nomeResolvido = relationName || item.sector || 'Setor Desconhecido'
 
           return {
@@ -154,7 +163,7 @@ export const useRankingStore = defineStore('ranking', () => {
       await evaluationStore.fetchEvaluationForEdit(id)
       
       if (evaluationStore.dataToEdit) {
-        // 3. ABRE o modal de avaliação (Correção da lógica antiga)
+        // 3. ABRE o modal de avaliação
         uiStore.openEvaluationModal()
       } else {
         throw new Error('Avaliação não encontrada.')
@@ -200,7 +209,9 @@ export const useRankingStore = defineStore('ranking', () => {
     )
 
     if (rpcError) throw rpcError
-    return rpcData?.data || []
+    
+    // CORREÇÃO DO ERRO TS2322: Casting explícito
+    return (rpcData?.data || []) as unknown as EvaluationExport[]
   }
 
   function formatDateForId(dateStr: string | null | undefined): string {
@@ -225,7 +236,14 @@ export const useRankingStore = defineStore('ranking', () => {
 
       // Mapeia para o formato "Legível" do Excel
       const formattedData = data.map((item) => {
-        const relationName = (item.sectors as any)?.name || (item.sectors as any)
+        // Lógica robusta para extrair nome do setor (Array ou Objeto)
+        let relationName = ''
+        if (Array.isArray(item.sectors) && item.sectors.length > 0) {
+             relationName = item.sectors[0].name
+        } else if (item.sectors && typeof item.sectors === 'object') {
+             relationName = (item.sectors as any).name
+        }
+
         const setor = relationName || item.sector || 'Desconhecido'
 
         return {
@@ -259,7 +277,7 @@ export const useRankingStore = defineStore('ranking', () => {
     totalPages,
     
     fetchResults,
-    openEditModal, // Renomeado de fetchEvaluationForEdit para ser mais semântico
+    openEditModal,
     restoreEvaluation,
     exportAllResults,
   }

@@ -4,7 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUiStore } from './stores/uiStore'
 import { useAuthStore } from './stores/authStore'
 
-// Componentes Globais (Sobreposição/Overlay)
+// Componentes Globais
 import NotificationContainer from './components/NotificationContainer.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import AuthModal from './components/AuthModal.vue'
@@ -17,13 +17,17 @@ const router = useRouter()
 const route = useRoute()
 
 onMounted(() => {
-  // Inicialização do Tema
   const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'system' || 'system'
   uiStore.applyTheme(savedTheme)
 })
 
-// Verifica se está na página de login para esconder a Navbar
 const isLoginPage = computed(() => route.path === '/' || route.name === 'login')
+
+// Helper para destacar o menu ativo
+const isActive = (path: string) => 
+  route.path === path 
+    ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 font-bold shadow-sm' 
+    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
 
 function doLogout() {
   authStore.signOut()
@@ -31,49 +35,73 @@ function doLogout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300 flex flex-col">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300 flex flex-col font-sans">
 
-    <nav v-if="!isLoginPage && authStore.user" class="sticky top-0 z-30 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 py-3 shadow-sm">
+    <nav v-if="!isLoginPage && authStore.user" class="sticky top-0 z-40 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 py-3 shadow-sm transition-all">
       <div class="max-w-7xl mx-auto flex justify-between items-center">
         
-        <div class="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity" @click="router.push('/evaluation')">
-          <img src="/KLIN.png" alt="Logo" class="h-8 w-auto" /> 
+        <div class="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity group" @click="router.push('/evaluation')">
+          <img src="/KLIN.png" alt="Logo" class="h-8 w-auto transition-transform group-hover:scale-105" /> 
           <span class="font-bold text-xl tracking-tight hidden sm:block text-teal-700 dark:text-teal-400">Gestão 5S</span>
         </div>
 
         <div class="hidden md:flex items-center gap-1 bg-gray-100 dark:bg-gray-700/50 p-1 rounded-xl">
           <button 
             @click="router.push('/evaluation')" 
-            class="px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none"
-            :class="route.path === '/evaluation' ? 'bg-white dark:bg-gray-600 shadow-sm text-teal-600 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+            class="px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none flex items-center gap-2"
+            :class="isActive('/evaluation')"
           >
-            <i class="fa-solid fa-plus-circle mr-1"></i> Avaliar
+            <i class="fa-solid fa-clipboard-check"></i> Avaliar
           </button>
 
           <button 
             @click="router.push('/dashboard')" 
-            class="px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none"
-            :class="route.path === '/dashboard' ? 'bg-white dark:bg-gray-600 shadow-sm text-teal-600 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+            class="px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none flex items-center gap-2"
+            :class="isActive('/dashboard')"
           >
-            Dashboard
+            <i class="fa-solid fa-chart-pie"></i> Dashboard
           </button>
           
           <button 
             @click="router.push('/ranking')" 
-            class="px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none"
-            :class="route.path === '/ranking' ? 'bg-white dark:bg-gray-600 shadow-sm text-teal-600 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+            class="px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none flex items-center gap-2"
+            :class="isActive('/ranking')"
           >
-            Ranking
+            <i class="fa-solid fa-list-ol"></i> Ranking
           </button>
         </div>
 
-        <div class="flex items-center gap-3">
-          <ThemeToggle />
-          
-          <button @click="doLogout" class="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Sair">
-            <i class="fa-solid fa-right-from-bracket text-lg"></i>
-          </button>
+        <div class="flex items-center gap-2 sm:gap-4">
+           
+           <button 
+              v-if="authStore.userRole === 'admin'" 
+              @click="uiStore.openAdminModal"
+              class="p-2 rounded-full text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+              title="Administração"
+            >
+              <i class="fa-solid fa-cog text-xl"></i>
+            </button>
+
+           <div class="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1 hidden sm:block"></div>
+
+           <ThemeToggle />
+           
+           <button @click="doLogout" class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-all" title="Sair">
+             <i class="fa-solid fa-right-from-bracket text-xl"></i>
+           </button>
         </div>
+      </div>
+      
+      <div class="md:hidden mt-3 border-t border-gray-100 dark:border-gray-700 pt-2 flex justify-around">
+           <button @click="router.push('/evaluation')" :class="isActive('/evaluation')" class="p-2 rounded-lg flex flex-col items-center gap-1 text-xs">
+             <i class="fa-solid fa-clipboard-check text-lg"></i> Avaliar
+           </button>
+           <button @click="router.push('/dashboard')" :class="isActive('/dashboard')" class="p-2 rounded-lg flex flex-col items-center gap-1 text-xs">
+             <i class="fa-solid fa-chart-pie text-lg"></i> Dash
+           </button>
+           <button @click="router.push('/ranking')" :class="isActive('/ranking')" class="p-2 rounded-lg flex flex-col items-center gap-1 text-xs">
+             <i class="fa-solid fa-list-ol text-lg"></i> Ranking
+           </button>
       </div>
     </nav>
 
@@ -102,10 +130,14 @@ function doLogout() {
 /* Transição suave entre páginas */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
-.fade-enter-from,
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(5px);
+}
 .fade-leave-to {
   opacity: 0;
+  transform: translateY(-5px);
 }
 </style>

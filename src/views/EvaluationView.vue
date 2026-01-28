@@ -3,7 +3,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEvaluationStore, type EvaluationFormPayload } from '../stores/evaluationStore'
 import { useUiStore } from '../stores/uiStore'
-// Removido useAuthStore pois não estava sendo usado no template atual
+// useAuthStore removido pois não é usado aqui
 import AppButton from '../components/ui/AppButton.vue'
 import AppCard from '../components/ui/AppCard.vue'
 import ComboboxSetor from '../components/ComboboxSetor.vue'
