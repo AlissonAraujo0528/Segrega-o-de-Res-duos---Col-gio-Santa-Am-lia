@@ -7,7 +7,7 @@ import { useUiStore } from '../stores/uiStore'
 
 // Componentes UI do Design System
 import AppButton from '../components/ui/AppButton.vue'
-import AppCard from '../components/ui/AppCard.vue'
+// AppCard removido pois não está sendo usado no template atual
 
 const rankingStore = useRankingStore()
 const authStore = useAuthStore()
