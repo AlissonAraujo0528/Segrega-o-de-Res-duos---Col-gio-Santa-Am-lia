@@ -1,7 +1,12 @@
 @import "tailwindcss";
 
-:root { color-scheme: light; }
-.dark { color-scheme: dark; }
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
 
 /* ✅ Tema */
 @theme {
@@ -47,7 +52,7 @@
   --color-border-light: var(--color-border-dark);
 }
 
-/* ✅ CORREÇÃO CRUCIAL: Aplicar o fundo na página inteira */
+/* ✅ CORREÇÃO: Aplica as cores ao corpo da página */
 body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
@@ -55,7 +60,7 @@ body {
   min-height: 100vh;
 }
 
-/* ✅ Transição global */
+/* Transição global */
 * {
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }

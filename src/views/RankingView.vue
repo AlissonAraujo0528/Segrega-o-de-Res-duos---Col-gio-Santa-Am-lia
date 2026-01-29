@@ -19,7 +19,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | undefined = undefined
 
 const isAdmin = computed(() => authStore.userRole === 'admin')
 
-// Helper de formatação de data (substitui item.data_formatada)
+// Formatação de data
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
@@ -37,30 +37,30 @@ watch(localFilterText, (newFilter) => {
   }, 500)
 })
 
-// --- AÇÃO DE EDITAR ---
+// --- CORREÇÃO: Ação de Editar ---
 async function handleEdit(id: string) {
   // 1. Carrega os dados na store de avaliação
   await evaluationStore.loadEvaluationForEdit(id)
   
-  // 2. Muda a aba para o formulário de avaliação (HomeView responde a isso)
+  // 2. Muda a aba para o formulário de avaliação na Home
   uiStore.setActiveTab('evaluation')
   
   uiStore.notify('Carregando auditoria para edição...', 'info')
 }
 
-// --- AÇÃO DE EXCLUIR ---
+// --- CORREÇÃO: Ação de Excluir ---
 function handleDelete(id: string) {
   if (!isAdmin.value) return
   
-  // Abre o modal de confirmação (Sintaxe correta da uiStore)
+  // Usa o novo padrão da uiStore (confirm em vez de showConfirmModal)
   uiStore.confirm({
     title: 'Mover para a Lixeira?',
     message: 'Tem certeza que deseja mover esta avaliação? Ela sairá do ranking.',
     okButtonText: 'Sim, Mover',
-    isDangerous: true,
+    isDangerous: true, 
     onConfirm: async () => {
       try {
-        // Chama a action correta da store (removeEvaluation)
+        // Usa o nome correto da action (removeEvaluation)
         const success = await evaluationStore.removeEvaluation(id)
         
         if (success) {
@@ -89,10 +89,10 @@ function getScoreBadgeClass(score: number) {
     <header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <h2 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-          <i class="fa-solid fa-ranking-star text-teal-600"></i> Ranking de Salas
+          <i class="fa-solid fa-list-check text-teal-600"></i> Histórico de Auditorias
         </h2>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Visão geral das pontuações ordenadas.
+          Visualize e gerencie as avaliações realizadas.
         </p>
       </div>
 
@@ -125,10 +125,10 @@ function getScoreBadgeClass(score: number) {
         <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700">
           <thead class="bg-gray-50 dark:bg-gray-700/50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pos.</th>
+              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data</th>
               <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Setor / Sala</th>
               <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pontos</th>
-              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data</th>
+              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Responsável</th>
               <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Avaliador</th>
               <th v-if="isAdmin" class="px-6 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
             </tr>
@@ -151,8 +151,8 @@ function getScoreBadgeClass(score: number) {
 
             <tr v-for="(item, index) in rankingStore.results" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
               
-              <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                #{{ (rankingStore.currentPage - 1) * 10 + index + 1 }}
+              <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                 {{ formatDate(item.date) }}
               </td>
 
               <td class="px-6 py-4 whitespace-nowrap">
@@ -162,14 +162,13 @@ function getScoreBadgeClass(score: number) {
               </td>
 
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold shadow-sm" :class="getScoreBadgeClass(item.score)">
-                  {{ item.score }}
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold shadow-sm border border-transparent" :class="getScoreBadgeClass(item.score)">
+                  {{ item.score }} pts
                 </span>
-                <span class="text-xs text-gray-400 ml-1 hidden sm:inline">/ 20</span>
               </td>
 
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                {{ formatDate(item.date) }}
+                {{ item.responsible }}
               </td>
 
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
