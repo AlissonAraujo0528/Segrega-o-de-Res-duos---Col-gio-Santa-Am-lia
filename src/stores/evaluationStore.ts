@@ -18,7 +18,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
 
   const loading = ref(false);
   
-  // --- Estado para Edição (Reintroduzido para compatibilidade com Ranking) ---
+  // --- Estado para Edição ---
   const editingId = ref<string | null>(null);
   const currentEvaluation = ref<any | null>(null);
 
@@ -33,15 +33,12 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     }
   }
 
-  // Correção do erro TS6133 (id não usado)
+  // Função auxiliar para evitar erros de tipagem no componente Combobox
   async function getSectorById(id: string) {
-    // Implementação básica para evitar o erro e preparar para futuro
-    // Se quiser implementar real: return await evaluationService.getSectorById(id);
     if (id) return null; 
     return null;
   }
 
-  // --- Ação de Carregar para Edição (Reintroduzida) ---
   async function loadEvaluationForEdit(id: string) {
     loading.value = true;
     try {
@@ -95,7 +92,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
         ui.notify('Avaliação registrada!', 'success');
       }
       
-      resetState(); // Limpa o estado após salvar
+      resetState();
       return true;
 
     } catch (err: any) {
@@ -107,7 +104,8 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     }
   }
 
-  async function deleteEvaluation(id: string) {
+  // CORREÇÃO: Renomeado de deleteEvaluation para removeEvaluation para bater com a View
+  async function removeEvaluation(id: string) {
      try {
         await evaluationService.delete(id);
         return true;
@@ -136,10 +134,10 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     currentEvaluation,
     searchSectors,
     getSectorById,
-    loadEvaluationForEdit, // Agora existe!
+    loadEvaluationForEdit,
     saveEvaluation,
-    deleteEvaluation,
+    removeEvaluation, // Agora exportado corretamente
     resetAllData,
-    resetState // Agora existe!
+    resetState
   };
 });
