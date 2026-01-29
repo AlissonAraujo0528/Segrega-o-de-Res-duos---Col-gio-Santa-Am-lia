@@ -1,33 +1,56 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { evaluationService } from '../services/evaluationService'; 
-import { useAuthStore } from './authStore'; 
-import { useNotificationStore } from './uiStore';
+import { evaluationService } from '../services/evaluationService';
+import { useUiStore } from './uiStore';
 
-// Tipos para o Frontend
-export interface EvaluationForm {
+// Interface do Estado da Avaliação (Front-end)
+export interface EvaluationState {
+  id?: string | null;
   sector_id: string;
   responsible: string;
-  score: number;
-  weight: number;
-  observations?: string;
-  image?: File | null;
+  // Mapeia os sensos: { seiri: 5, seiton: 3 ... }
+  scores: Record<string, number>; 
+  observations: string;
+  photo_url: string | null;
 }
 
 export const useEvaluationStore = defineStore('evaluation', () => {
   // --- Dependências ---
-  const auth = useAuthStore();
-  const notify = useNotificationStore(); // Sua store de notificações
+  const ui = useUiStore();
 
   // --- State (Reativo) ---
   const loading = ref(false);
   const editingId = ref<string | null>(null);
   
-  // Estado do formulário (para preencher na edição)
-  const currentEvaluation = ref<any | null>(null); 
+  // Estado inicializado para suportar o v-model do Wizard sem erros
+  const currentEvaluation = ref<EvaluationState>({
+    sector_id: '',
+    responsible: '',
+    scores: {},
+    observations: '',
+    photo_url: null
+  });
 
   // --- Actions ---
 
+  /**
+   * Reseta o formulário para o estado inicial
+   */
+  function resetState() {
+    editingId.value = null;
+    currentEvaluation.value = {
+      sector_id: '',
+      responsible: '',
+      scores: {},
+      observations: '',
+      photo_url: null
+    };
+    loading.value = false;
+  }
+
+  /**
+   * Busca setores (Proxy para o service)
+   */
   async function searchSectors(query: string) {
     try {
       return await evaluationService.searchSectors(query);
@@ -37,126 +60,140 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     }
   }
 
+  /**
+   * Carrega dados para edição
+   */
   async function loadEvaluationForEdit(id: string) {
     loading.value = true;
     try {
       const data = await evaluationService.getById(id);
       
-      // Prepara o objeto para o formulário
+      // Mapeia do banco para o estado local
       currentEvaluation.value = {
         id: data.id,
         sector_id: data.sector_id,
         responsible: data.responsible,
-        score: data.score,
+        // Se o banco não tiver scores detalhados, assume vazio ou lógica customizada
+        scores: {}, 
         observations: data.observations,
-        photo_url: data.photo_url, // URL da foto existente
-        // weight não costuma vir do banco se for calculado, ajuste conforme necessário
+        photo_url: data.photo_url // URL vinda do service (details ou coluna)
       };
+      
+      // Se você salvou os scores individuais no JSONB 'details', recupere aqui:
+      if (data.details && (data.details as any).scores) {
+         currentEvaluation.value.scores = (data.details as any).scores;
+      }
+
       editingId.value = id;
     } catch (err: any) {
-      notify.add({ type: 'error', message: err.message });
+      ui.notify(err.message || 'Erro ao carregar.', 'error');
     } finally {
       loading.value = false;
     }
   }
 
-  async function saveEvaluation(form: EvaluationForm) {
-    if (!auth.user) {
-      notify.add({ type: 'error', message: 'Sessão expirada. Faça login novamente.' });
-      return false;
-    }
-
+  /**
+   * Upload de Evidência (Passo 3 do Wizard)
+   */
+  async function uploadEvidence(file: File, userId: string) {
     loading.value = true;
     try {
-      // 1. Upload da imagem (se houver)
-      let uploadedUrl = null;
-      if (form.image) {
-        uploadedUrl = await evaluationService.uploadPhoto(form.image, auth.user.id);
-      }
+      const url = await evaluationService.uploadPhoto(file, userId);
+      currentEvaluation.value.photo_url = url;
+      ui.notify('Foto enviada com sucesso.', 'success');
+    } catch (err: any) {
+      ui.notify('Erro no upload da foto.', 'error');
+    } finally {
+      loading.value = false;
+    }
+  }
 
-      // 2. Montar objeto para o banco
-      // Se não fez upload novo, usa a URL antiga (em caso de edição)
-      const finalPhotoUrl = uploadedUrl || (editingId.value ? currentEvaluation.value?.photo_url : null);
+  /**
+   * Enviar Avaliação Final (Create ou Update)
+   */
+  async function submitEvaluation(userId: string) {
+    loading.value = true;
+    try {
+      // 1. Calcular Nota Total
+      const totalScore = Object.values(currentEvaluation.value.scores).reduce((a, b) => a + b, 0);
 
+      // 2. Montar Payload para o Supabase
       const payload = {
-        user_id: auth.user.id,
-        sector_id: form.sector_id,
-        responsible: form.responsible,
-        score: form.score,
-        observations: form.observations,
-        date: new Date().toISOString().split('T')[0],
-        evaluator: auth.user.email?.split('@')[0] || 'Avaliador',
-        details: finalPhotoUrl ? { photo_url: finalPhotoUrl } : null, // JSONB structure
+        sector_id: currentEvaluation.value.sector_id,
+        responsible: currentEvaluation.value.responsible,
+        score: totalScore,
+        observations: currentEvaluation.value.observations,
+        date: new Date().toISOString().split('T')[0], // Hoje YYYY-MM-DD
+        evaluator: 'Usuário ' + userId.slice(0, 4), // Simplificado
+        // Salvamos URL da foto e os scores individuais no JSONB 'details'
+        details: {
+          photo_url: currentEvaluation.value.photo_url,
+          scores: currentEvaluation.value.scores
+        }
       };
 
-      // 3. Salvar (Update ou Create)
+      // 3. Enviar
       if (editingId.value) {
         await evaluationService.update(editingId.value, payload);
-        notify.add({ type: 'success', message: 'Avaliação atualizada com sucesso!' });
       } else {
-        // created_by só no insert se sua tabela tiver essa coluna
-        await evaluationService.create({ ...payload, created_by: auth.user.id } as any);
-        notify.add({ type: 'success', message: 'Avaliação registrada!' });
+        await evaluationService.create({ ...payload, user_id: userId } as any);
       }
 
-      resetState();
       return true;
 
     } catch (err: any) {
-      notify.add({ type: 'error', message: err.message || 'Erro ao salvar.' });
+      ui.notify(err.message || 'Erro ao salvar avaliação.', 'error');
       return false;
     } finally {
       loading.value = false;
     }
   }
 
+  /**
+   * Remover Avaliação
+   */
   async function removeEvaluation(id: string) {
-    if (!confirm('Tem certeza que deseja excluir?')) return;
-    
     loading.value = true;
     try {
       await evaluationService.delete(id);
-      notify.add({ type: 'success', message: 'Item excluído.' });
       return true;
     } catch (err: any) {
-      notify.add({ type: 'error', message: 'Erro ao excluir.' });
+      ui.notify(err.message || 'Erro ao excluir.', 'error');
       return false;
     } finally {
       loading.value = false;
     }
   }
 
+  /**
+   * Resetar Banco de Dados (Admin)
+   */
   async function resetAllData() {
-    if (!confirm('ATENÇÃO: Isso apagará TODOS os dados. Continuar?')) return;
-
     loading.value = true;
     try {
       await evaluationService.deleteAll();
-      notify.add({ type: 'success', message: 'Banco de dados limpo.' });
       return true;
     } catch (err: any) {
-      notify.add({ type: 'error', message: err.message });
+      ui.notify(err.message || 'Erro ao limpar dados.', 'error');
       return false;
     } finally {
       loading.value = false;
     }
   }
 
-  function resetState() {
-    editingId.value = null;
-    currentEvaluation.value = null;
-    loading.value = false;
-  }
-
   return {
+    // State
     loading,
     editingId,
     currentEvaluation,
+    
+    // Actions
+    resetState,
     searchSectors,
     loadEvaluationForEdit,
-    saveEvaluation,
+    uploadEvidence,
+    submitEvaluation,
     removeEvaluation,
-    resetAllData,
-    resetState
+    resetAllData
   };
 });
