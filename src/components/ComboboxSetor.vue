@@ -9,10 +9,18 @@ import {
   TransitionRoot
 } from '@headlessui/vue'
 import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid'
-import { useEvaluationStore, type Sector } from '../stores/evaluationStore'
+import { evaluationService } from '../services/evaluationService'
+import { supabaseClient } from '../lib/supabaseClient' 
+
+// Definição local do tipo para evitar erros de importação
+interface Sector {
+  id: string
+  name: string
+  default_responsible?: string | null
+}
 
 const props = defineProps<{
-  // Aceita string (UUID) ou number (legado) para compatibilidade
+  // Aceita string (UUID) ou number (legado)
   modelValue: string | number | null
   isInvalid?: boolean
 }>()
@@ -22,7 +30,6 @@ const emit = defineEmits<{
   (e: 'update:responsible', name: string): void
 }>()
 
-const store = useEvaluationStore()
 const query = ref('')
 const selectedSector = ref<Sector | null>(null)
 const filteredSectors = ref<Sector[]>([])
@@ -30,6 +37,7 @@ const loading = ref(false)
 
 let debounceTimeout: ReturnType<typeof setTimeout>
 
+// --- Busca de setores via Service ---
 const onQueryChange = (event: Event) => {
   const val = (event.target as HTMLInputElement).value
   query.value = val
@@ -40,7 +48,9 @@ const onQueryChange = (event: Event) => {
   debounceTimeout = setTimeout(async () => {
     if (val.trim().length >= 1) {
       try {
-        filteredSectors.value = await store.searchSectors(val)
+        // Casting seguro pois o retorno do banco é compatível com Sector
+        const results = await evaluationService.searchSectors(val)
+        filteredSectors.value = results as Sector[]
       } catch (error) {
         console.error("Erro na busca:", error)
         filteredSectors.value = []
@@ -52,6 +62,7 @@ const onQueryChange = (event: Event) => {
   }, 300)
 }
 
+// --- Atualiza o pai quando seleciona ---
 watch(selectedSector, (newSector) => {
   if (newSector) {
     emit('update:modelValue', newSector.id)
@@ -61,14 +72,26 @@ watch(selectedSector, (newSector) => {
   }
 })
 
+// --- Carrega o setor inicial (Edição) ---
 watch(() => props.modelValue, async (newId) => {
   if (newId) {
+    // Evita recarregar se já for o mesmo que está selecionado
     if (selectedSector.value?.id === newId) return
     if (selectedSector.value?.id === newId.toString()) return
 
-    const sector = await store.getSectorById(newId.toString())
-    if (sector) {
-      selectedSector.value = sector
+    try {
+      // Busca direta no banco para resolver o ID para Nome
+      const { data, error } = await supabaseClient
+        .from('sectors')
+        .select('id, name, default_responsible')
+        .eq('id', newId)
+        .single()
+      
+      if (!error && data) {
+        selectedSector.value = data as Sector
+      }
+    } catch (err) {
+      console.error('Erro ao carregar setor inicial:', err)
     }
   } else {
     selectedSector.value = null
@@ -85,12 +108,12 @@ const displayValue = (item: unknown) => {
   <div class="w-full">
     <Combobox v-model="selectedSector" nullable>
       <div class="relative">
-        <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="mb-1 block text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
           Setor / Sala
         </label>
         
         <div
-          class="relative w-full cursor-default overflow-hidden rounded-lg bg-white dark:bg-gray-700 text-left shadow-sm focus:outline-none sm:text-sm"
+          class="relative w-full cursor-default overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-sm focus:outline-none sm:text-sm"
           :class="isInvalid ? 'ring-2 ring-red-500' : 'border border-gray-300 dark:border-gray-600'"
         >
           <ComboboxInput
@@ -116,16 +139,13 @@ const displayValue = (item: unknown) => {
           >
             <div v-if="loading" class="relative cursor-default select-none py-2 px-4 text-gray-700 dark:text-gray-300">
               <span class="flex items-center gap-2">
-                <svg class="animate-spin h-4 w-4 text-teal-600 dark:text-teal-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+                <i class="fa-solid fa-circle-notch fa-spin text-teal-600"></i>
                 Buscando...
               </span>
             </div>
 
             <div v-else-if="filteredSectors.length === 0 && query !== ''"
-                 class="relative cursor-default select-none py-2 px-4 text-gray-700 dark:text-gray-400">
+                 class="relative cursor-default select-none py-2 px-4 text-gray-500 dark:text-gray-400">
               Nenhum setor encontrado.
             </div>
 
@@ -140,7 +160,7 @@ const displayValue = (item: unknown) => {
                 class="relative cursor-default select-none py-2 pl-10 pr-4 transition-colors"
                 :class="{
                   'bg-teal-600 text-white': active,
-                  'text-gray-900 dark:text-gray-100': !active,
+                  'text-gray-900 dark:text-white': !active,
                 }"
               >
                 <span class="block truncate" :class="{ 'font-medium': selected }">
@@ -163,6 +183,8 @@ const displayValue = (item: unknown) => {
       </div>
     </Combobox>
     
-    <p v-if="isInvalid" class="mt-1 text-sm text-red-500 dark:text-red-400">Selecione um setor válido.</p>
+    <p v-if="isInvalid" class="mt-1 text-xs text-red-500 font-bold flex items-center gap-1">
+      <i class="fa-solid fa-circle-exclamation"></i> Selecione um setor válido.
+    </p>
   </div>
 </template>

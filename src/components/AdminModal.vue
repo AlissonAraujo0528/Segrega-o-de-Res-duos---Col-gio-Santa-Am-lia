@@ -46,7 +46,7 @@ async function handleResetDatabase() {
 </script>
 
 <template>
-  <AppModal :show="ui.modals.admin" title="Administração do Sistema" @close="handleClose">
+  <AppModal :isOpen="ui.modals.admin" title="Administração do Sistema" @close="handleClose">
     <div class="space-y-6">
       
       <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800">

@@ -1,25 +1,24 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { supabaseClient } from '../lib/supabaseClient'
-import { useUiStore } from './uiStore'
-import type { User } from '@supabase/supabase-js'
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import { supabaseClient } from '../lib/supabaseClient';
+import { useUiStore } from './uiStore';
+import type { User } from '@supabase/supabase-js';
 
 // Tempo limite de inatividade (15 minutos)
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 
 export const useAuthStore = defineStore('auth', () => {
-  
   // --- STATE ---
-  const user = ref<User | null>(null) // Tipagem correta do Supabase
-  const userRole = ref<string>('user')
-  const loading = ref(true) 
-  const sessionTimer = ref<ReturnType<typeof setTimeout> | null>(null)
-  
-  const uiStore = useUiStore()
+  const user = ref<User | null>(null);
+  const userRole = ref<string>('user');
+  const loading = ref(true);
+  const sessionTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+
+  const ui = useUiStore();
 
   // --- GETTERS ---
-  const isAuthReady = computed(() => !loading.value)
-  const isAuthenticated = computed(() => !!user.value)
+  const isAuthReady = computed(() => !loading.value);
+  const isAuthenticated = computed(() => !!user.value);
 
   // --- ACTIONS INTERNAS ---
 
@@ -29,80 +28,79 @@ export const useAuthStore = defineStore('auth', () => {
         .from('profiles')
         .select('role')
         .eq('id', userId)
-        .single()
-      
+        .single();
+
       if (!error && data) {
-        userRole.value = data.role
+        userRole.value = data.role;
       }
     } catch (e) {
-      console.warn('Role não encontrada, assumindo "user".', e)
-      userRole.value = 'user'
+      console.warn('Role não encontrada, assumindo "user".', e);
+      userRole.value = 'user';
     }
   }
 
   function startInactivityTimer() {
-    clearTimeout(sessionTimer.value as any) // Cast simples para limpar timeout
-    
+    if (sessionTimer.value) clearTimeout(sessionTimer.value);
+
     if (user.value) {
       sessionTimer.value = setTimeout(() => {
-        console.warn('Sessão expirada por inatividade.')
-        uiStore.showToast('Sessão expirada. Por favor, faça login novamente.', 'warning')
-        signOut() 
-      }, INACTIVITY_TIMEOUT_MS)
+        console.warn('Sessão expirada por inatividade.');
+        // CORREÇÃO: Passando argumentos separados (string, string)
+        ui.notify('Sessão expirada. Faça login novamente.', 'warning');
+        signOut();
+      }, INACTIVITY_TIMEOUT_MS);
     }
   }
 
   function resetTimer() {
-    if (user.value) startInactivityTimer()
+    if (user.value) startInactivityTimer();
   }
 
   // --- ACTIONS PÚBLICAS ---
 
   async function initialize() {
-    loading.value = true
-    
+    loading.value = true;
+
     // Detecção de link de recuperação de senha na URL
     if (window.location.hash && window.location.hash.includes('type=recovery')) {
-       uiStore.authModalMode = 'update_password'
-       uiStore.openAuthModal()
+      ui.authModalMode = 'update_password';
+      ui.openModal('auth');
     }
 
     try {
       // Verifica sessão atual
-      const { data } = await supabaseClient.auth.getSession()
-      
+      const { data } = await supabaseClient.auth.getSession();
+
       if (data.session?.user) {
-        user.value = data.session.user
+        user.value = data.session.user;
         // Não usamos await aqui para não bloquear o render inicial da App
-        fetchUserRole(user.value.id)
-        startInactivityTimer()
+        fetchUserRole(user.value.id);
+        startInactivityTimer();
       } else {
-        user.value = null
-        userRole.value = 'user'
+        user.value = null;
+        userRole.value = 'user';
       }
     } catch (error) {
-      console.error('Erro Auth Init:', error)
+      console.error('Erro Auth Init:', error);
     } finally {
-      loading.value = false
+      loading.value = false;
     }
 
     // Listener de eventos do Supabase
     supabaseClient.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
-        uiStore.authModalMode = 'update_password'
-        uiStore.openAuthModal()
-      } 
-      else if (event === 'SIGNED_IN' && session?.user) {
-        user.value = session.user
-        await fetchUserRole(session.user.id)
-        startInactivityTimer()
-      } 
-      else if (event === 'SIGNED_OUT') {
-        user.value = null
-        userRole.value = 'user'
-        if (sessionTimer.value) clearTimeout(sessionTimer.value)
+        ui.authModalMode = 'update_password';
+        ui.openModal('auth');
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        user.value = session.user;
+        await fetchUserRole(session.user.id);
+        startInactivityTimer();
+      } else if (event === 'SIGNED_OUT') {
+        user.value = null;
+        userRole.value = 'user';
+        if (sessionTimer.value) clearTimeout(sessionTimer.value);
       }
-    })
+    });
   }
 
   async function handleLogin(email: string, pass: string): Promise<boolean> {
@@ -110,60 +108,67 @@ export const useAuthStore = defineStore('auth', () => {
       const { data, error } = await supabaseClient.auth.signInWithPassword({
         email,
         password: pass,
-      })
+      });
 
-      if (error) throw error
-      
+      if (error) throw error;
+
       if (data.user) {
-        // O listener onAuthStateChange vai cuidar de setar o user e timer,
-        // mas retornamos true para a UI saber que deu certo imediatamente.
-        return true
+        return true;
       }
-      return false
+      return false;
     } catch (e: any) {
-      console.error('Login Falhou:', e.message)
-      return false
+      console.error('Login Falhou:', e.message);
+      return false;
     }
   }
 
   async function signOut() {
     try {
-      await supabaseClient.auth.signOut()
+      await supabaseClient.auth.signOut();
     } catch (error) {
-      console.error('Erro no SignOut:', error)
+      console.error('Erro no SignOut:', error);
     } finally {
-      user.value = null
-      userRole.value = 'user'
-      if (sessionTimer.value) clearTimeout(sessionTimer.value)
+      user.value = null;
+      userRole.value = 'user';
+      if (sessionTimer.value) clearTimeout(sessionTimer.value);
+
+      // CORREÇÃO: Argumentos separados
+      ui.notify('Você saiu do sistema.', 'info');
       
-      // Hard Reload para limpar memória e garantir segurança
-      window.location.href = '/' 
+      // Força recarregamento para limpar estados da memória
+      window.location.href = '/';
     }
   }
 
   async function handleForgotPassword(email: string) {
-    const redirectTo = window.location.origin
-    return await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo })
+    const redirectTo = window.location.origin;
+    return await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
   }
-  
+
   async function completePasswordRecovery() {
     // Limpa a URL suja do hash do supabase
-    window.history.replaceState({}, document.title, window.location.pathname)
-    
-    const { data } = await supabaseClient.auth.getSession()
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    const { data } = await supabaseClient.auth.getSession();
     if (data.session?.user) {
-        user.value = data.session.user
-        await fetchUserRole(data.session.user.id)
-        
-        uiStore.closeModal()
-        uiStore.showToast('Senha recuperada com sucesso!', 'success')
-        startInactivityTimer()
+      user.value = data.session.user;
+      await fetchUserRole(data.session.user.id);
+
+      ui.closeAllModals();
+      // CORREÇÃO: Argumentos separados
+      ui.notify('Senha recuperada com sucesso!', 'success');
+      startInactivityTimer();
     }
+  }
+  
+  // Helper para abrir modal de login
+  function openLoginModal() {
+    ui.openAuth('login');
   }
 
   return {
     user,
-    userRole, 
+    userRole,
     loading,
     isAuthReady,
     isAuthenticated,
@@ -172,6 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
     signOut,
     handleForgotPassword,
     completePasswordRecovery,
-    resetTimer
-  }
-})
+    resetTimer,
+    openLoginModal
+  };
+});

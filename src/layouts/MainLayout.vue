@@ -40,9 +40,9 @@ const uiStore = useUiStore()
         </div>
 
         <div class="flex items-center gap-3">
-           
+            
            <button 
-             @click="uiStore.openEvaluationModal"
+             @click="uiStore.openEvaluation()"
              class="hidden sm:flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm active:transform active:scale-95"
            >
              <i class="fa-solid fa-plus"></i>
@@ -53,7 +53,7 @@ const uiStore = useUiStore()
 
            <button 
              v-if="authStore.userRole === 'admin'"
-             @click="uiStore.openAdminModal"
+             @click="uiStore.openAdmin()"
              class="p-2 text-gray-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-gray-700 rounded-lg transition-all relative group"
              title="Painel Administrativo"
            >
@@ -88,8 +88,9 @@ const uiStore = useUiStore()
           >
             Ranking
           </router-link>
+          
           <button 
-             @click="uiStore.openEvaluationModal"
+             @click="uiStore.openEvaluation()"
              class="flex-1 bg-teal-600 text-white py-2 rounded-lg text-sm font-medium"
            >
              + Avaliar

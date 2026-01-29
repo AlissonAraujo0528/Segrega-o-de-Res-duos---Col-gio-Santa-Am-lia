@@ -12,8 +12,8 @@ const password = ref('')
 const newPassword = ref('')
 const isLoading = ref(false)
 
-// Fecha o modal
-const close = () => uiStore.closeModal()
+// CORREÇÃO: Usando o nome correto da action
+const close = () => uiStore.closeAllModals()
 
 // Modo atual (Login, Recovery, Update)
 const mode = computed(() => uiStore.authModalMode)
@@ -38,9 +38,12 @@ async function handleSubmit() {
   try {
     if (mode.value === 'login') {
       if (!email.value || !password.value) throw new Error('Preencha e-mail e senha.')
+      
       const success = await authStore.handleLogin(email.value, password.value)
+      
       if (success) {
-        uiStore.showToast('Reconectado com sucesso!', 'success')
+        // CORREÇÃO: showToast -> notify
+        uiStore.notify('Reconectado com sucesso!', 'success')
         close()
       } else {
         throw new Error('Credenciais inválidas.')
@@ -49,9 +52,12 @@ async function handleSubmit() {
     
     else if (mode.value === 'register') { 
       if (!email.value) throw new Error('Digite seu e-mail.')
+      
       const { error } = await authStore.handleForgotPassword(email.value)
       if (error) throw error
-      uiStore.showToast('E-mail enviado! Verifique sua caixa de entrada.', 'success')
+      
+      // CORREÇÃO: showToast -> notify
+      uiStore.notify('E-mail enviado! Verifique sua caixa de entrada.', 'success')
       close()
     }
     
@@ -59,12 +65,12 @@ async function handleSubmit() {
       if (newPassword.value.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.')
       
       await authStore.completePasswordRecovery()
-      // O store já exibe toast e fecha o modal se der certo
+      // O store já exibe notificação e fecha o modal se der certo
     }
   } catch (error: any) {
-    // CORREÇÃO: Logamos o erro para satisfazer o TypeScript (TS6133) e ajudar no debug
     console.error('Erro no AuthModal:', error)
-    uiStore.showToast(error.message || 'Ocorreu um erro.', 'error')
+    // CORREÇÃO: showToast -> notify
+    uiStore.notify(error.message || 'Ocorreu um erro.', 'error')
   } finally {
     isLoading.value = false
   }

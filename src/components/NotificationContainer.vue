@@ -42,7 +42,7 @@ function getIcon(type: ToastType) {
           <i :class="getIcon(toast.type)"></i>
         </div>
         
-        <div class="flex-1 text-sm font-medium leading-tight">
+        <div class="flex-1 text-sm font-medium leading-tight break-words">
           {{ toast.message }}
         </div>
         

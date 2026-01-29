@@ -4,54 +4,52 @@ import { useUiStore } from '../stores/uiStore'
 import AppModal from './ui/AppModal.vue'
 import AppButton from './ui/AppButton.vue'
 
-const uiStore = useUiStore()
+const ui = useUiStore()
 
-// Computa o ícone baseado na classe do botão (ex: vermelho = perigo)
+// Computa o ícone baseado na flag 'isDangerous' da store
 const confirmIcon = computed(() => {
-  const cls = uiStore.confirmState?.okButtonClass || ''
-  if (cls.includes('red') || cls.includes('danger')) {
-    return 'fa-solid fa-triangle-exclamation'
-  }
-  return 'fa-solid fa-check'
+  return ui.confirmState?.isDangerous 
+    ? 'fa-solid fa-triangle-exclamation' 
+    : 'fa-solid fa-check'
 })
 
 function handleCancel() {
-  uiStore.closeModal()
+  ui.closeAllModals()
 }
 
 function handleConfirm() {
-  uiStore.executeConfirm()
+  ui.handleConfirmExecution()
 }
 </script>
 
 <template>
   <AppModal 
-    :isOpen="uiStore.modals.confirm"
-    :title="uiStore.confirmState?.title || 'Confirmação'"
+    :isOpen="ui.modals.confirm"
+    :title="ui.confirmState?.title || 'Confirmação'"
     size="sm"
     @close="handleCancel"
   >
     
     <div class="text-gray-700 dark:text-gray-300 text-base leading-relaxed">
-      {{ uiStore.confirmState?.message }}
+      {{ ui.confirmState?.message }}
     </div>
 
     <template #footer>
       <AppButton 
         variant="secondary" 
         @click="handleCancel"
-        :disabled="uiStore.isConfirmLoading"
+        :disabled="ui.isConfirmLoading"
       >
-        {{ uiStore.confirmState?.cancelButtonText || 'Cancelar' }}
+        {{ ui.confirmState?.cancelButtonText || 'Cancelar' }}
       </AppButton>
       
       <AppButton 
         @click="handleConfirm" 
-        :loading="uiStore.isConfirmLoading"
-        :class="uiStore.confirmState?.okButtonClass" 
+        :loading="ui.isConfirmLoading"
+        :variant="ui.confirmState?.isDangerous ? 'danger' : 'primary'"
         :icon="confirmIcon"
       >
-        {{ uiStore.confirmState?.okButtonText || 'Confirmar' }}
+        {{ ui.confirmState?.okButtonText || 'Confirmar' }}
       </AppButton>
     </template>
 

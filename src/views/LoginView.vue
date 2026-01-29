@@ -25,7 +25,8 @@ const togglePassword = () => {
 }
 
 async function handleSubmit() {
-  if (!email.value) return uiStore.showToast('Por favor, digite seu e-mail.', 'warning')
+  // CORREÇÃO: showToast -> notify
+  if (!email.value) return uiStore.notify('Por favor, digite seu e-mail.', 'warning')
   
   isLoading.value = true
 
@@ -35,7 +36,8 @@ async function handleSubmit() {
       const { error } = await authStore.handleForgotPassword(email.value)
       if (error) throw error
       
-      uiStore.showToast('Link de recuperação enviado para seu e-mail!', 'success')
+      // CORREÇÃO: showToast -> notify
+      uiStore.notify('Link de recuperação enviado para seu e-mail!', 'success')
       viewMode.value = 'login' // Volta pro login automaticamente
     } else {
       // --- FLUXO DE LOGIN ---
@@ -45,14 +47,16 @@ async function handleSubmit() {
       
       const success = await authStore.handleLogin(email.value, password.value)
       if (success) {
-        uiStore.showToast(`Olá, ${authStore.user?.email?.split('@')[0]}!`, 'success')
+        // CORREÇÃO: showToast -> notify
+        uiStore.notify(`Olá, ${authStore.user?.email?.split('@')[0]}!`, 'success')
         router.push('/dashboard') // Redirecionamento explícito
       } else {
         throw new Error('E-mail ou senha incorretos.')
       }
     }
   } catch (error: any) {
-    uiStore.showToast(error.message || 'Ocorreu um erro inesperado.', 'error')
+    // CORREÇÃO: showToast -> notify
+    uiStore.notify(error.message || 'Ocorreu um erro inesperado.', 'error')
   } finally {
     isLoading.value = false
   }
