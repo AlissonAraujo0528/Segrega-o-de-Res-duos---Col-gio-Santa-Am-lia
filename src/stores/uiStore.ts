@@ -1,178 +1,214 @@
-import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { defineStore } from 'pinia';
+import { ref } from 'vue';
 
 // --- TIPOS ---
 
-export type ToastType = 'success' | 'error' | 'info' | 'warning'
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
 export interface Toast {
-  id: number
-  message: string
-  type: ToastType
-  duration?: number
+  id: number;
+  message: string;
+  type: ToastType;
+  duration: number;
 }
 
-// Definição clara de quais modais existem no sistema
-// REMOVIDO: ranking e dashboard (agora são rotas)
-export interface ModalState {
-  evaluation: boolean
-  admin: boolean
-  auth: boolean
-  confirm: boolean
+export interface ToastInput {
+  message: string;
+  type?: ToastType;
+  duration?: number;
+  timeout?: number; // Alias para duration (para compatibilidade)
 }
 
-// Tipo para as opções do Modal de Confirmação
 export interface ConfirmOptions {
-  title: string
-  message: string
-  okButtonText?: string
-  cancelButtonText?: string
-  okButtonClass?: string
-  onConfirm: () => Promise<void> | void
+  title: string;
+  message: string;
+  okButtonText?: string;
+  cancelButtonText?: string;
+  isDangerous?: boolean; // Adicionado para estilizar botão vermelho
+  onConfirm: () => Promise<void> | void;
 }
 
-export type ThemeName = 'light' | 'dark' | 'system'
+export type ThemeName = 'light' | 'dark' | 'system';
+
+// --- STORE ---
 
 export const useUiStore = defineStore('ui', () => {
   
-  // --- STATE ---
-  
-  // 1. Modais
-  const modals = ref<ModalState>({
+  // =========================================
+  // 1. STATE (ESTADO)
+  // =========================================
+
+  // Modais (Gestão centralizada)
+  const modals = ref({
     evaluation: false,
     admin: false,
     auth: false,
-    confirm: false
-  })
+    confirm: false,
+    // Adicione novos modais aqui conforme o app cresce
+  });
 
-  // 2. Auth Modal Mode
-  const authModalMode = ref<'login' | 'register' | 'update_password'>('login')
-  const isRecoveryMode = ref(false)
+  // Auth Modal (Estado interno do modal de login)
+  const authModalMode = ref<'login' | 'register' | 'update_password'>('login');
 
-  // 3. Toasts
-  const toasts = ref<Toast[]>([])
-  let toastIdCounter = 0
+  // Toasts (Notificações)
+  const toasts = ref<Toast[]>([]);
+  let toastIdCounter = 0;
 
-  // 4. Confirmação
-  const confirmState = ref<ConfirmOptions | null>(null)
-  const isConfirmLoading = ref(false)
+  // Confirmação (Dialog)
+  const confirmState = ref<ConfirmOptions | null>(null);
+  const isConfirmLoading = ref(false);
 
-  // 5. Tema
-  const theme = ref<ThemeName>('system')
+  // Tema
+  const theme = ref<ThemeName>('system');
 
-  // --- ACTIONS: MODAIS ---
+  // =========================================
+  // 2. ACTIONS: TOASTS (NOTIFICAÇÕES)
+  // =========================================
 
-  function openModal(name: keyof ModalState) {
-    closeModal() 
-    modals.value[name] = true
-    document.body.style.overflow = 'hidden'
-  }
-
-  function closeModal() {
-    (Object.keys(modals.value) as Array<keyof ModalState>).forEach(key => {
-      modals.value[key] = false
-    })
-    document.body.style.overflow = ''
-    isRecoveryMode.value = false
-  }
-
-  // --- ACTIONS ESPECÍFICAS (Helpers) ---
-  const openEvaluationModal = () => openModal('evaluation')
-  const openAdminModal = () => openModal('admin')
-  const openAuthModal = () => openModal('auth')
-  
-  // REMOVIDOS: openRankingModal e openDashboardModal
-
-  // --- ACTIONS: TOASTS ---
-
-  function showToast(message: string, type: ToastType = 'info', duration = 4000) {
-    const id = toastIdCounter++
-    const toast: Toast = { id, message, type, duration }
+  /**
+   * Adiciona uma notificação.
+   * Aceita objeto { message, type } para ser flexível.
+   */
+  function add(input: ToastInput) {
+    const id = toastIdCounter++;
+    const duration = input.duration || input.timeout || 4000;
     
-    toasts.value.push(toast)
+    const toast: Toast = {
+      id,
+      message: input.message,
+      type: input.type || 'info',
+      duration
+    };
+
+    toasts.value.push(toast);
 
     if (duration > 0) {
       setTimeout(() => {
-        removeToast(id)
-      }, duration)
+        removeToast(id);
+      }, duration);
     }
+  }
+
+  // Alias para uso rápido: ui.notify('Olá')
+  function notify(message: string, type: ToastType = 'info') {
+    add({ message, type });
   }
 
   function removeToast(id: number) {
-    toasts.value = toasts.value.filter(t => t.id !== id)
+    const index = toasts.value.findIndex(t => t.id === id);
+    if (index !== -1) toasts.value.splice(index, 1);
   }
 
-  // --- ACTIONS: CONFIRMAÇÃO ---
+  // =========================================
+  // 3. ACTIONS: MODAIS
+  // =========================================
 
-  function showConfirmModal(options: ConfirmOptions) {
-    confirmState.value = options
-    modals.value.confirm = true
-    document.body.style.overflow = 'hidden'
+  function openModal(name: keyof typeof modals.value) {
+    closeAllModals(); // Fecha outros para evitar sobreposição em mobile
+    modals.value[name] = true;
+    document.body.style.overflow = 'hidden'; // Previne scroll no fundo
   }
 
-  async function executeConfirm() {
-    if (confirmState.value?.onConfirm) {
-      isConfirmLoading.value = true
-      try {
-        await confirmState.value.onConfirm()
-      } finally {
-        isConfirmLoading.value = false
-        closeModal() 
-        confirmState.value = null
-      }
+  function closeAllModals() {
+    (Object.keys(modals.value) as Array<keyof typeof modals.value>).forEach(key => {
+      modals.value[key] = false;
+    });
+    document.body.style.overflow = '';
+    
+    // Reseta estados auxiliares
+    isConfirmLoading.value = false;
+    confirmState.value = null;
+  }
+
+  // Helpers semânticos
+  const openEvaluation = () => openModal('evaluation');
+  const openAdmin = () => openModal('admin');
+  const openAuth = (mode: 'login' | 'register' = 'login') => {
+    authModalMode.value = mode;
+    openModal('auth');
+  };
+
+  // =========================================
+  // 4. ACTIONS: CONFIRMAÇÃO
+  // =========================================
+
+  function confirm(options: ConfirmOptions) {
+    confirmState.value = options;
+    openModal('confirm');
+  }
+
+  async function handleConfirmExecution() {
+    if (!confirmState.value?.onConfirm) return;
+
+    isConfirmLoading.value = true;
+    try {
+      await confirmState.value.onConfirm();
+      closeAllModals();
+    } catch (error) {
+      console.error(error);
+      notify('Erro ao processar ação.', 'error');
+    } finally {
+      isConfirmLoading.value = false;
     }
   }
 
-  // --- ACTIONS: TEMA ---
+  // =========================================
+  // 5. ACTIONS: TEMA
+  // =========================================
+
+  function initTheme() {
+    const saved = localStorage.getItem('theme') as ThemeName;
+    if (saved) applyTheme(saved);
+    else applyTheme('system');
+  }
 
   function applyTheme(newTheme: ThemeName) {
-    theme.value = newTheme
-    localStorage.setItem('theme', newTheme)
+    theme.value = newTheme;
+    localStorage.setItem('theme', newTheme);
 
     const isDark = 
       newTheme === 'dark' || 
-      (newTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      (newTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-    if (isDark) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+    const html = document.documentElement;
+    if (isDark) html.classList.add('dark');
+    else html.classList.remove('dark');
   }
 
   function toggleTheme() {
-    const current = theme.value
-    const next = current === 'light' ? 'dark' : 'light'
-    applyTheme(next)
+    const isCurrentlyDark = document.documentElement.classList.contains('dark');
+    applyTheme(isCurrentlyDark ? 'light' : 'dark');
   }
 
   return {
     // State
     modals,
     authModalMode,
-    isRecoveryMode,
     toasts,
     confirmState,
     isConfirmLoading,
     theme,
 
-    // Actions Modais
-    openModal,
-    closeModal,
-    openEvaluationModal,
-    openAdminModal,
-    openAuthModal,
-
-    // Actions Toasts
-    showToast,
+    // Actions
+    add,       // Usado pelo evaluationStore (Interface genérica)
+    notify,    // Usado por componentes simples
     removeToast,
-
-    // Actions Confirm
-    showConfirmModal,
-    executeConfirm,
-
-    // Actions Theme
-    applyTheme,
+    
+    openModal,
+    closeAllModals,
+    openEvaluation,
+    openAdmin,
+    openAuth,
+    
+    confirm,
+    handleConfirmExecution,
+    
+    initTheme,
     toggleTheme
-  }
-})
+  };
+});
+
+// --- COMPATIBILIDADE ---
+// Isso resolve o erro do evaluationStore: "has no exported member useNotificationStore"
+// Agora ambas as importações apontam para a mesma store centralizada.
+export const useNotificationStore = useUiStore;

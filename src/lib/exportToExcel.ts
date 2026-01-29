@@ -1,70 +1,105 @@
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+
+// Define a interface para que o TypeScript saiba o que esperar
+export interface ExportOptions {
+  fileName: string;
+  sheetName?: string;
+  columns: Partial<ExcelJS.Column>[];
+}
 
 /**
- * Converte um array de objetos em um arquivo Excel (XLSX) e inicia o download.
- * @param data O array de dados a ser exportado.
- * @param fileName O nome do arquivo.
- * @param sheetName O nome da aba da planilha (opcional).
+ * Gera um arquivo Excel estilizado e profissional.
+ * Substitui a biblioteca 'xlsx' (SheetJS) pela 'exceljs' para permitir cores e formatação.
  */
-export function exportToExcel<T extends Record<string, any>>(
-  data: T[], 
-  fileName: string, 
-  sheetName: string = 'Dados'
-): void {
-  // 1. Validação de Segurança
-  if (!data || !Array.isArray(data) || data.length === 0) {
-    console.warn('Exportação cancelada: Nenhum dado fornecido ou formato inválido.')
-    return
+export const exportToExcel = async (data: any[], options: ExportOptions) => {
+  // 1. Validação simples
+  if (!data || data.length === 0) {
+    console.warn('Exportação cancelada: Nenhum dado fornecido.');
+    alert('Não há dados para exportar.');
+    return;
   }
 
-  try {
-    // 2. Sanitização dos Dados (Remove Proxies do Vue)
-    const safeData = JSON.parse(JSON.stringify(data))
+  // 2. Criar o Workbook (o arquivo Excel em memória)
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sistema de Gestão 5S';
+  workbook.created = new Date();
 
-    // 3. Converte JSON para Sheet
-    const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(safeData)
+  const worksheet = workbook.addWorksheet(options.sheetName || 'Dados');
 
-    // 4. Lógica de Auto-Width (Largura das Colunas)
-    // Definimos explicitamente que as chaves são Strings
-    const allKeys = Array.from(new Set(safeData.flatMap((item: any) => Object.keys(item)))) as string[]
+  // 3. Configurar Colunas
+  worksheet.columns = options.columns.map(col => ({
+    ...col,
+    style: { 
+      font: { name: 'Arial', size: 10 },
+      alignment: { vertical: 'middle', wrapText: true } 
+    }
+  }));
 
-    const colWidths = allKeys.map((key: string) => {
-      let maxLength = key.length 
+  // 4. Estilizar o Cabeçalho (Header)
+  const headerRow = worksheet.getRow(1);
+  headerRow.height = 30;
+  
+  headerRow.eachCell((cell) => {
+    cell.font = { 
+      name: 'Arial', 
+      size: 12, 
+      bold: true, 
+      color: { argb: 'FFFFFFFF' } // Branco
+    };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF0D9488' } // Teal-600 (Cor do seu tema)
+    };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.border = {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'medium' },
+      right: { style: 'thin' }
+    };
+  });
 
-      // Pegamos uma amostra das primeiras 100 linhas para calcular a largura
-      const sampleRows = safeData.slice(0, 100)
-      
-      for (const row of sampleRows) {
-        if (!row) continue
+  // 5. Adicionar os dados
+  worksheet.addRows(data);
 
-        // Acessamos o valor usando a chave tipada como string
-        const value = row[key]
-        
-        if (value !== null && value !== undefined) {
-          const cellLength = value.toString().length
-          if (cellLength > maxLength) {
-            maxLength = cellLength
-          }
-        }
+  // 6. Formatação Condicional nas Linhas (Efeito Zebra)
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber > 1) { // Ignora o cabeçalho
+      // Alternar cores de fundo para facilitar leitura
+      if (rowNumber % 2 === 0) {
+        row.eachCell({ includeEmpty: true }, (cell) => {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF9FAFB' } // Gray-50 muito suave
+          };
+        });
       }
+      
+      // Bordas suaves em todas as células
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+        };
+      });
+    }
+  });
 
-      // Retorna largura mínima de 10 e máxima de 50 caracteres
-      return { wch: Math.min(Math.max(maxLength + 2, 10), 50) }
-    })
+  // 7. Gerar o arquivo binário (Buffer)
+  const buffer = await workbook.xlsx.writeBuffer();
+  
+  // 8. Criar o Blob e forçar o download
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  
+  // Garante a extensão correta
+  const finalName = options.fileName.endsWith('.xlsx') 
+    ? options.fileName 
+    : `${options.fileName}.xlsx`;
 
-    ws['!cols'] = colWidths
-
-    // 5. Cria o Workbook e Adiciona a Sheet
-    const wb: XLSX.WorkBook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, sheetName)
-
-    // 6. Garante extensão correta
-    const finalName = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`
-
-    // 7. Download
-    XLSX.writeFile(wb, finalName)
-    
-  } catch (error) {
-    console.error("Erro crítico na exportação Excel:", error)
-  }
-}
+  saveAs(blob, finalName);
+};

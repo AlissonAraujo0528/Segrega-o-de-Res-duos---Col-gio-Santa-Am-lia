@@ -1,313 +1,162 @@
-import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { supabaseClient } from '../lib/supabaseClient'
+import { defineStore } from 'pinia';
+import { ref } from 'vue';
+import { evaluationService } from '../services/evaluationService'; 
+import { useAuthStore } from './authStore'; 
+import { useNotificationStore } from './uiStore';
 
-// --- TIPOS ---
-
-export interface Sector {
-  id: string 
-  name: string
-  default_responsible?: string | null
-}
-
-export interface EvaluationFormPayload {
-  sector_id: string
-  responsible: string
-  score: number
-  weight: number
-  observations?: string
-  image?: File | null
-}
-
-// Interface completa do registro no banco
-export interface EvaluationRecord {
-  id: string
-  created_at: string
-  user_id: string
-  sector_id: string
-  responsible: string
-  score: number
-  observations?: string
-  details?: { photo_url?: string } | null // Campo JSONB para flexibilidade
-  date?: string
-  evaluator?: string
-}
-
-// Interface para edição (Front-end)
-export interface EvaluationFull extends EvaluationFormPayload {
-  id: string
-  user_id: string
-  photo_url: string | null
-  created_at: string
-  date?: string
-  evaluator?: string
+// Tipos para o Frontend
+export interface EvaluationForm {
+  sector_id: string;
+  responsible: string;
+  score: number;
+  weight: number;
+  observations?: string;
+  image?: File | null;
 }
 
 export const useEvaluationStore = defineStore('evaluation', () => {
+  // --- Dependências ---
+  const auth = useAuthStore();
+  const notify = useNotificationStore(); // Sua store de notificações
+
+  // --- State (Reativo) ---
+  const loading = ref(false);
+  const editingId = ref<string | null>(null);
   
-  // --- STATE ---
-  const loading = ref(false)
-  const error = ref<string | null>(null)
-  
-  const editingEvaluationId = ref<string | null>(null)
-  const dataToEdit = ref<EvaluationFull | null>(null)
+  // Estado do formulário (para preencher na edição)
+  const currentEvaluation = ref<any | null>(null); 
 
-  // --- ACTIONS ---
+  // --- Actions ---
 
-  /**
-   * Busca setores para o Combobox
-   */
-  async function searchSectors(query: string): Promise<Sector[]> {
+  async function searchSectors(query: string) {
     try {
-      // Se a query for muito curta, retorna vazio para economizar banda
-      if (query.length < 1) return []
-
-      const { data, error: err } = await supabaseClient
-        .from('sectors')
-        .select('id, name, default_responsible')
-        .ilike('name', `%${query}%`)
-        .limit(10)
-        .order('name')
-
-      if (err) throw err
-      return (data as Sector[]) || []
-    } catch (err: any) {
-      console.error('Erro ao buscar setores:', err)
-      return []
+      return await evaluationService.searchSectors(query);
+    } catch (error) {
+      console.error(error);
+      return [];
     }
   }
 
-  /**
-   * Busca setor por ID (para edição)
-   */
-  async function getSectorById(id: string): Promise<Sector | null> {
+  async function loadEvaluationForEdit(id: string) {
+    loading.value = true;
     try {
-      const { data, error: err } = await supabaseClient
-        .from('sectors')
-        .select('id, name, default_responsible')
-        .eq('id', id)
-        .single()
-
-      if (err) throw err
-      return data as Sector
-    } catch (err) {
-      return null
-    }
-  }
-
-  /**
-   * Helper privado para upload de imagem
-   */
-  async function uploadEvidence(file: File, userId: string): Promise<string | null> {
-    try {
-      const fileExt = file.name.split('.').pop()
-      // Nome único: userID/timestamp.ext
-      const fileName = `${userId}/${Date.now()}.${fileExt}`
+      const data = await evaluationService.getById(id);
       
-      const { error: uploadError } = await supabaseClient.storage
-        .from('evaluations')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        })
-
-      if (uploadError) throw uploadError
-
-      const { data } = supabaseClient.storage
-        .from('evaluations')
-        .getPublicUrl(fileName)
-        
-      return data.publicUrl
-    } catch (e) {
-      console.error('Erro no upload:', e)
-      throw new Error('Falha ao enviar a foto. Tente novamente.')
-    }
-  }
-
-  /**
-   * Salvar Avaliação (Insert ou Update)
-   */
-  async function submitEvaluation(payload: EvaluationFormPayload) {
-    loading.value = true
-    error.value = null
-    
-    try {
-      // 1. Auth Check
-      const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-      if (authError || !user) throw new Error('Sessão expirada.')
-
-      // 2. Upload (se houver nova imagem)
-      let photoUrl = null
-      if (payload.image) {
-        photoUrl = await uploadEvidence(payload.image, user.id)
-      }
-
-      // 3. Preparar Payload do Banco
-      // Se for edição e não teve upload novo, mantemos a URL antiga (se existir)
-      let finalPhotoUrl = photoUrl
-      if (!photoUrl && editingEvaluationId.value && dataToEdit.value?.photo_url) {
-        finalPhotoUrl = dataToEdit.value.photo_url
-      }
-
-      const dbData = {
-        user_id: user.id, // Vínculo com auth.users
-        sector_id: payload.sector_id,
-        responsible: payload.responsible,
-        score: payload.score,
-        observations: payload.observations,
-        date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-        evaluator: user.email?.split('@')[0] || 'Avaliador', // Fallback visual
-        
-        // Salva a URL da foto dentro do JSONB 'details' para flexibilidade
-        details: finalPhotoUrl ? { photo_url: finalPhotoUrl } : null
-      }
-      
-      if (editingEvaluationId.value) {
-        // --- UPDATE ---
-        const { error: updateError } = await supabaseClient
-          .from('evaluations')
-          .update(dbData)
-          .eq('id', editingEvaluationId.value)
-          
-        if (updateError) throw updateError
-      } else {
-        // --- INSERT ---
-        // Adiciona created_by apenas na criação (para log de auditoria imutável)
-        const insertData = { ...dbData, created_by: user.id }
-        const { error: insertError } = await supabaseClient
-          .from('evaluations')
-          .insert(insertData)
-
-        if (insertError) throw insertError
-      }
-
-      clearEditMode()
-      return true
-
-    } catch (e: any) {
-      console.error('Submit Error:', e)
-      error.value = e.message || 'Erro ao salvar avaliação.'
-      return false
-    } finally {
-      loading.value = false
-    }
-  }
-
-  /**
-   * Prepara edição
-   */
-  async function fetchEvaluationForEdit(id: string) {
-    loading.value = true
-    error.value = null
-
-    try {
-      const { data, error: err } = await supabaseClient
-        .from('evaluations')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-      if (err) throw err
-
-      // Extração segura da URL da foto (pode estar no JSONB details ou coluna antiga)
-      const photoUrl = data.details?.photo_url || data.photo_url || null
-
-      dataToEdit.value = {
+      // Prepara o objeto para o formulário
+      currentEvaluation.value = {
         id: data.id,
-        created_at: data.created_at,
-        date: data.date,
-        evaluator: data.evaluator,
-        user_id: data.user_id,
-        
         sector_id: data.sector_id,
         responsible: data.responsible,
         score: data.score,
-        weight: 0,
         observations: data.observations,
-        image: null, // Input de arquivo começa vazio na edição
-        photo_url: photoUrl
+        photo_url: data.photo_url, // URL da foto existente
+        // weight não costuma vir do banco se for calculado, ajuste conforme necessário
+      };
+      editingId.value = id;
+    } catch (err: any) {
+      notify.add({ type: 'error', message: err.message });
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function saveEvaluation(form: EvaluationForm) {
+    if (!auth.user) {
+      notify.add({ type: 'error', message: 'Sessão expirada. Faça login novamente.' });
+      return false;
+    }
+
+    loading.value = true;
+    try {
+      // 1. Upload da imagem (se houver)
+      let uploadedUrl = null;
+      if (form.image) {
+        uploadedUrl = await evaluationService.uploadPhoto(form.image, auth.user.id);
       }
 
-      editingEvaluationId.value = id
+      // 2. Montar objeto para o banco
+      // Se não fez upload novo, usa a URL antiga (em caso de edição)
+      const finalPhotoUrl = uploadedUrl || (editingId.value ? currentEvaluation.value?.photo_url : null);
+
+      const payload = {
+        user_id: auth.user.id,
+        sector_id: form.sector_id,
+        responsible: form.responsible,
+        score: form.score,
+        observations: form.observations,
+        date: new Date().toISOString().split('T')[0],
+        evaluator: auth.user.email?.split('@')[0] || 'Avaliador',
+        details: finalPhotoUrl ? { photo_url: finalPhotoUrl } : null, // JSONB structure
+      };
+
+      // 3. Salvar (Update ou Create)
+      if (editingId.value) {
+        await evaluationService.update(editingId.value, payload);
+        notify.add({ type: 'success', message: 'Avaliação atualizada com sucesso!' });
+      } else {
+        // created_by só no insert se sua tabela tiver essa coluna
+        await evaluationService.create({ ...payload, created_by: auth.user.id } as any);
+        notify.add({ type: 'success', message: 'Avaliação registrada!' });
+      }
+
+      resetState();
+      return true;
 
     } catch (err: any) {
-      console.error('Erro fetch edit:', err)
-      error.value = "Erro ao carregar dados para edição."
-      clearEditMode()
+      notify.add({ type: 'error', message: err.message || 'Erro ao salvar.' });
+      return false;
     } finally {
-      loading.value = false
+      loading.value = false;
     }
   }
 
-  function clearEditMode() {
-    editingEvaluationId.value = null
-    dataToEdit.value = null
-    error.value = null
-  }
-
-  /**
-   * Deletar Avaliação Única
-   */
-  async function deleteEvaluation(id: string) {
-    loading.value = true
+  async function removeEvaluation(id: string) {
+    if (!confirm('Tem certeza que deseja excluir?')) return;
+    
+    loading.value = true;
     try {
-      const { error: err } = await supabaseClient
-        .from('evaluations')
-        .delete()
-        .eq('id', id)
-
-      if (err) throw err
-      return true
+      await evaluationService.delete(id);
+      notify.add({ type: 'success', message: 'Item excluído.' });
+      return true;
     } catch (err: any) {
-      error.value = err.message
-      return false
+      notify.add({ type: 'error', message: 'Erro ao excluir.' });
+      return false;
     } finally {
-      loading.value = false
+      loading.value = false;
     }
   }
 
-  /**
-   * Deletar TUDO (Admin)
-   */
-  async function deleteAllEvaluations() {
-    loading.value = true
-    try {
-       // Tenta RPC primeiro (mais seguro/rápido se configurado)
-       const { error: rpcError } = await supabaseClient.rpc('delete_all_evaluations')
-       
-       if (!rpcError) return true
+  async function resetAllData() {
+    if (!confirm('ATENÇÃO: Isso apagará TODOS os dados. Continuar?')) return;
 
-       // Fallback: Delete manual (depende de RLS permitir)
-       console.warn('Fallback delete...', rpcError)
-       const { error: delError } = await supabaseClient
-         .from('evaluations')
-         .delete()
-         .neq('id', '00000000-0000-0000-0000-000000000000') // UUID trick para "todos"
-       
-       if (delError) throw delError
-       return true
+    loading.value = true;
+    try {
+      await evaluationService.deleteAll();
+      notify.add({ type: 'success', message: 'Banco de dados limpo.' });
+      return true;
     } catch (err: any) {
-      error.value = "Falha ao limpar banco de dados."
-      return false
+      notify.add({ type: 'error', message: err.message });
+      return false;
     } finally {
-      loading.value = false
+      loading.value = false;
     }
+  }
+
+  function resetState() {
+    editingId.value = null;
+    currentEvaluation.value = null;
+    loading.value = false;
   }
 
   return {
-    // State
     loading,
-    error,
-    editingEvaluationId,
-    dataToEdit,
-    
-    // Actions
+    editingId,
+    currentEvaluation,
     searchSectors,
-    getSectorById,
-    submitEvaluation,
-    fetchEvaluationForEdit,
-    clearEditMode,
-    deleteEvaluation,
-    deleteAllEvaluations
-  }
-})
+    loadEvaluationForEdit,
+    saveEvaluation,
+    removeEvaluation,
+    resetAllData,
+    resetState
+  };
+});
