@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import AppButton from '../components/ui/AppButton.vue'
+// AppButton removido pois não é usado aqui
 
 const authStore = useAuthStore()
 const uiStore = useUiStore()

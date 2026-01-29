@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 
@@ -10,9 +9,6 @@ import ThemeToggle from '../components/ThemeToggle.vue'
 
 const authStore = useAuthStore()
 const uiStore = useUiStore()
-
-const userInitial = computed(() => authStore.user?.email?.charAt(0).toUpperCase() || 'U')
-const userName = computed(() => authStore.user?.email?.split('@')[0] || 'Usuário')
 </script>
 
 <template>
@@ -99,7 +95,6 @@ const userName = computed(() => authStore.user?.email?.split('@')[0] || 'Usuári
 </template>
 
 <style scoped>
-/* Animação mais suave de escala ao trocar de aba */
 .scale-enter-active, .scale-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
 .scale-enter-from { opacity: 0; transform: scale(0.98); }
 .scale-leave-to { opacity: 0; transform: scale(1.02); }
