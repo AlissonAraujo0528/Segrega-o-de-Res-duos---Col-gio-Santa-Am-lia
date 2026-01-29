@@ -15,30 +15,30 @@ const showPassword = ref(false)
 const isLoading = ref(false)
 const viewMode = ref<'login' | 'recovery'>('login')
 
-const pageTitle = computed(() => viewMode.value === 'login' ? 'Bem-vindo(a)!' : 'Recuperar Acesso')
+const pageTitle = computed(() => viewMode.value === 'login' ? 'Bem-vindo' : 'Recuperar Senha')
 const togglePassword = () => { showPassword.value = !showPassword.value }
 
 async function handleSubmit() {
-  if (!email.value) return uiStore.notify('Por favor, digite seu e-mail.', 'warning')
+  if (!email.value) return uiStore.notify('Digite seu e-mail.', 'warning')
   isLoading.value = true
   try {
     if (viewMode.value === 'recovery') {
       const { error } = await authStore.handleForgotPassword(email.value)
       if (error) throw error
-      uiStore.notify('Link enviado!', 'success')
+      uiStore.notify('Link enviado para o e-mail!', 'success')
       viewMode.value = 'login'
     } else {
-      if (!password.value) throw new Error('Por favor, digite sua senha.')
+      if (!password.value) throw new Error('Digite sua senha.')
       const success = await authStore.handleLogin(email.value, password.value)
       if (success) {
-        uiStore.notify(`Olá!`, 'success')
+        uiStore.notify(`Olá, ${authStore.user?.email?.split('@')[0]}!`, 'success')
         router.push('/')
       } else {
-        throw new Error('Credenciais inválidas.')
+        throw new Error('E-mail ou senha incorretos.')
       }
     }
   } catch (error: any) {
-    uiStore.notify(error.message || 'Erro inesperado.', 'error')
+    uiStore.notify(error.message || 'Erro ao entrar.', 'error')
   } finally {
     isLoading.value = false
   }
@@ -46,75 +46,103 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="min-h-screen flex bg-white dark:bg-gray-900">
+  <div class="min-h-screen w-full flex items-center justify-center p-4 bg-gradient-to-br from-teal-800 via-sky-900 to-slate-900 relative overflow-hidden">
     
-    <div class="hidden lg:flex lg:w-1/2 relative bg-gray-900 overflow-hidden">
-      <img src="https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?q=80&w=2070&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover opacity-40"/>
-      <div class="absolute inset-0 bg-gradient-to-br from-teal-900/90 to-gray-900/80"></div>
+    <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-teal-500/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="w-full max-w-lg bg-white/95 dark:bg-gray-900/90 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden border border-white/20 animate-scale-in">
       
-      <div class="relative z-10 p-12 text-white flex flex-col justify-between h-full">
-        <div>
-           <img src="../assets/KLIN.png" class="h-12 w-auto bg-white/10 p-2 rounded-lg backdrop-blur-sm mb-6" />
-        </div>
-        <div>
-          <h1 class="text-4xl font-extrabold mb-4">Klin Ambiental</h1>
-          <p class="text-teal-100 text-lg">Coleta seletiva e gestão sustentável.</p>
-        </div>
-        <div class="text-xs text-teal-200/60 font-mono">
-          System v2.1.0 &bull; Secure Environment
-        </div>
-      </div>
-    </div>
-
-    <div class="w-full lg:w-1/2 flex items-center justify-center p-6 bg-gray-50 dark:bg-gray-900">
-      <div class="w-full max-w-sm space-y-6">
-        
-        <div class="text-center mb-8 lg:hidden">
-          <img src="../assets/KLIN.png" class="h-12 w-auto mx-auto mb-4" />
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Klin Ambiental</h2>
-        </div>
-
-        <div class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
-          <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-6 text-center">{{ pageTitle }}</h2>
-          
-          <form @submit.prevent="handleSubmit" class="space-y-5">
-            <div>
-              <label class="text-xs font-bold text-gray-500 uppercase ml-1">E-mail</label>
-              <input v-model="email" type="email" required placeholder="seu@email.com" class="block w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" />
-            </div>
-
-            <div v-if="viewMode === 'login'">
-              <div class="flex justify-between ml-1 mb-1">
-                <label class="text-xs font-bold text-gray-500 uppercase">Senha</label>
-                <a href="#" @click.prevent="viewMode = 'recovery'" class="text-xs text-teal-600 hover:underline">Esqueceu?</a>
-              </div>
-              <div class="relative">
-                <input v-model="password" :type="showPassword ? 'text' : 'password'" required placeholder="••••••" class="block w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" />
-                <button type="button" @click="togglePassword" class="absolute inset-y-0 right-4 text-gray-400 flex items-center"><i :class="showPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i></button>
-              </div>
-            </div>
-
-            <AppButton type="submit" class="w-full py-4 text-lg shadow-lg" :loading="isLoading">
-              {{ viewMode === 'login' ? 'Entrar' : 'Recuperar' }}
-            </AppButton>
-          </form>
-
-          <div v-if="viewMode === 'recovery'" class="text-center mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-             <button @click="viewMode = 'login'" class="text-sm font-medium text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white flex items-center justify-center gap-2 mx-auto transition-colors">
-               <i class="fa-solid fa-arrow-left"></i> Voltar ao login
-             </button>
+      <div class="p-8 sm:p-10">
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center justify-center w-20 h-20 bg-teal-50 dark:bg-teal-900/30 rounded-2xl mb-4 shadow-inner">
+             <img src="../assets/KLIN.png" alt="Klin" class="h-10 w-auto opacity-90" />
           </div>
+          <h1 class="text-3xl font-extrabold text-gray-800 dark:text-white tracking-tight">{{ pageTitle }}</h1>
+          <p class="text-gray-500 dark:text-gray-400 mt-2 text-sm">
+            {{ viewMode === 'login' ? 'Gestão Ambiental & Coleta Seletiva' : 'Digite seu e-mail para receber o link.' }}
+          </p>
         </div>
-        
-        <p class="text-center text-xs text-gray-400 dark:text-gray-600">
-          &copy; {{ new Date().getFullYear() }} Klin Produtos Infantis.
-        </p>
+
+        <form @submit.prevent="handleSubmit" class="space-y-6">
+          
+          <div class="space-y-4">
+            <div class="relative group">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-teal-600 transition-colors">
+                <i class="fa-solid fa-envelope text-lg"></i>
+              </div>
+              <input 
+                v-model="email" 
+                type="email" 
+                required 
+                placeholder="E-mail corporativo" 
+                class="block w-full pl-12 pr-4 py-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-4 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all font-medium"
+              />
+            </div>
+
+            <div v-if="viewMode === 'login'" class="relative group">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-teal-600 transition-colors">
+                <i class="fa-solid fa-lock text-lg"></i>
+              </div>
+              <input 
+                v-model="password" 
+                :type="showPassword ? 'text' : 'password'" 
+                required 
+                placeholder="Sua senha" 
+                class="block w-full pl-12 pr-12 py-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-4 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all font-medium"
+              />
+              <button 
+                type="button" 
+                @click="togglePassword" 
+                class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-teal-600 transition-colors cursor-pointer"
+              >
+                <i :class="showPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+              </button>
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            :disabled="isLoading"
+            class="w-full py-4 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white font-bold text-lg shadow-lg shadow-teal-500/30 transform hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <i v-if="isLoading" class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ viewMode === 'login' ? 'Entrar no Sistema' : 'Enviar Link de Recuperação' }}</span>
+          </button>
+        </form>
+
+        <div class="mt-8 text-center">
+          <button 
+            v-if="viewMode === 'login'"
+            @click="viewMode = 'recovery'" 
+            class="text-sm font-medium text-gray-500 hover:text-teal-600 transition-colors"
+          >
+            Esqueceu sua senha?
+          </button>
+          <button 
+            v-else
+            @click="viewMode = 'login'" 
+            class="text-sm font-bold text-teal-600 hover:text-teal-500 flex items-center justify-center gap-2 mx-auto transition-colors"
+          >
+            <i class="fa-solid fa-arrow-left"></i> Voltar ao Login
+          </button>
+        </div>
+
       </div>
+      
+      <div class="h-2 w-full bg-gradient-to-r from-teal-500 via-sky-500 to-blue-600"></div>
     </div>
+
+    <div class="absolute bottom-4 text-center w-full">
+      <p class="text-xs text-white/40 font-medium">
+        &copy; {{ new Date().getFullYear() }} Klin Produtos Infantis. Ambiente Seguro.
+      </p>
+    </div>
+
   </div>
 </template>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.animate-scale-in { animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 </style>
