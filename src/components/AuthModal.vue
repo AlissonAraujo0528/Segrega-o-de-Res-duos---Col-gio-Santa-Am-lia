@@ -12,22 +12,23 @@ const password = ref('')
 const newPassword = ref('')
 const isLoading = ref(false)
 
-// CORREÇÃO: Usando o nome correto da action
 const close = () => uiStore.closeAllModals()
 
-// Modo atual (Login, Recovery, Update)
 const mode = computed(() => uiStore.authModalMode)
 
-// Títulos dinâmicos
+// Títulos dinâmicos CORRIGIDOS
 const title = computed(() => {
-  if (mode.value === 'login') return 'Sessão Expirada'
+  if (mode.value === 'login') {
+    // Só diz "Sessão Expirada" se já existia usuário logado antes
+    return authStore.user ? 'Sessão Expirada' : 'Acesso ao Sistema'
+  }
   if (mode.value === 'register') return 'Recuperar Acesso'
   if (mode.value === 'update_password') return 'Definir Nova Senha'
   return 'Autenticação'
 })
 
 const subtitle = computed(() => {
-  if (mode.value === 'login') return 'Por favor, faça login novamente para continuar.'
+  if (mode.value === 'login') return 'Insira suas credenciais para continuar.'
   if (mode.value === 'register') return 'Enviaremos um link para seu e-mail.'
   if (mode.value === 'update_password') return 'Crie uma nova senha segura.'
   return ''
@@ -42,9 +43,8 @@ async function handleSubmit() {
       const success = await authStore.handleLogin(email.value, password.value)
       
       if (success) {
-        // CORREÇÃO: showToast -> notify
-        uiStore.notify('Reconectado com sucesso!', 'success')
-        close()
+        uiStore.notify('Login realizado com sucesso!', 'success')
+        close() // Fecha o modal ao logar
       } else {
         throw new Error('Credenciais inválidas.')
       }
@@ -52,24 +52,18 @@ async function handleSubmit() {
     
     else if (mode.value === 'register') { 
       if (!email.value) throw new Error('Digite seu e-mail.')
-      
       const { error } = await authStore.handleForgotPassword(email.value)
       if (error) throw error
-      
-      // CORREÇÃO: showToast -> notify
       uiStore.notify('E-mail enviado! Verifique sua caixa de entrada.', 'success')
       close()
     }
     
     else if (mode.value === 'update_password') {
       if (newPassword.value.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.')
-      
       await authStore.completePasswordRecovery()
-      // O store já exibe notificação e fecha o modal se der certo
     }
   } catch (error: any) {
     console.error('Erro no AuthModal:', error)
-    // CORREÇÃO: showToast -> notify
     uiStore.notify(error.message || 'Ocorreu um erro.', 'error')
   } finally {
     isLoading.value = false
@@ -78,10 +72,17 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+  <div v-if="uiStore.modals.auth" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
     
-    <div class="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
+    <div class="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-scale-in relative">
       
+      <button 
+        @click="close"
+        class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+      >
+        <i class="fa-solid fa-xmark text-xl"></i>
+      </button>
+
       <div class="px-8 pt-8 pb-6 text-center">
         <div class="w-16 h-16 bg-teal-50 dark:bg-teal-900/20 rounded-full flex items-center justify-center mx-auto mb-4 text-teal-600 dark:text-teal-400">
           <i v-if="mode === 'login'" class="fa-solid fa-right-to-bracket text-2xl"></i>

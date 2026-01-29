@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, reactive } from 'vue';
 
 // --- TIPOS ---
 
@@ -16,7 +16,6 @@ export interface ToastInput {
   message: string;
   type?: ToastType;
   duration?: number;
-  timeout?: number; // Alias para duration (para compatibilidade)
 }
 
 export interface ConfirmOptions {
@@ -24,7 +23,7 @@ export interface ConfirmOptions {
   message: string;
   okButtonText?: string;
   cancelButtonText?: string;
-  isDangerous?: boolean; // Adicionado para estilizar botão vermelho
+  isDangerous?: boolean;
   onConfirm: () => Promise<void> | void;
 }
 
@@ -39,22 +38,21 @@ export const useUiStore = defineStore('ui', () => {
   // =========================================
 
   // Modais (Gestão centralizada)
-  const modals = ref({
+  const modals = reactive({
     evaluation: false,
     admin: false,
     auth: false,
     confirm: false,
-    // Adicione novos modais aqui conforme o app cresce
   });
 
-  // Auth Modal (Estado interno do modal de login)
+  // Auth Modal (Estado interno)
   const authModalMode = ref<'login' | 'register' | 'update_password'>('login');
 
-  // Toasts (Notificações)
+  // Toasts
   const toasts = ref<Toast[]>([]);
   let toastIdCounter = 0;
 
-  // Confirmação (Dialog)
+  // Confirmação
   const confirmState = ref<ConfirmOptions | null>(null);
   const isConfirmLoading = ref(false);
 
@@ -62,16 +60,12 @@ export const useUiStore = defineStore('ui', () => {
   const theme = ref<ThemeName>('system');
 
   // =========================================
-  // 2. ACTIONS: TOASTS (NOTIFICAÇÕES)
+  // 2. ACTIONS: TOASTS
   // =========================================
 
-  /**
-   * Adiciona uma notificação.
-   * Aceita objeto { message, type } para ser flexível.
-   */
   function add(input: ToastInput) {
     const id = toastIdCounter++;
-    const duration = input.duration || input.timeout || 4000;
+    const duration = input.duration || 4000;
     
     const toast: Toast = {
       id,
@@ -89,7 +83,7 @@ export const useUiStore = defineStore('ui', () => {
     }
   }
 
-  // Alias para uso rápido: ui.notify('Olá')
+  // Alias rápido
   function notify(message: string, type: ToastType = 'info') {
     add({ message, type });
   }
@@ -103,26 +97,28 @@ export const useUiStore = defineStore('ui', () => {
   // 3. ACTIONS: MODAIS
   // =========================================
 
-  function openModal(name: keyof typeof modals.value) {
-    closeAllModals(); // Fecha outros para evitar sobreposição em mobile
-    modals.value[name] = true;
-    document.body.style.overflow = 'hidden'; // Previne scroll no fundo
+  function openModal(name: keyof typeof modals) {
+    closeAllModals(); // Fecha outros para evitar sobreposição
+    modals[name] = true;
+    document.body.style.overflow = 'hidden'; // Trava scroll
   }
 
   function closeAllModals() {
-    (Object.keys(modals.value) as Array<keyof typeof modals.value>).forEach(key => {
-      modals.value[key] = false;
-    });
-    document.body.style.overflow = '';
+    modals.evaluation = false;
+    modals.admin = false;
+    modals.auth = false; // Isso garante que o modal de login suma
+    modals.confirm = false;
     
-    // Reseta estados auxiliares
+    document.body.style.overflow = ''; // Destrava scroll
+    
+    // Reseta estados
     isConfirmLoading.value = false;
     confirmState.value = null;
   }
 
-  // Helpers semânticos
   const openEvaluation = () => openModal('evaluation');
   const openAdmin = () => openModal('admin');
+  
   const openAuth = (mode: 'login' | 'register' = 'login') => {
     authModalMode.value = mode;
     openModal('auth');
@@ -181,34 +177,25 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    // State
     modals,
     authModalMode,
     toasts,
     confirmState,
     isConfirmLoading,
     theme,
-
-    // Actions
-    add,       // Usado pelo evaluationStore (Interface genérica)
-    notify,    // Usado por componentes simples
+    add,
+    notify,
     removeToast,
-    
     openModal,
     closeAllModals,
     openEvaluation,
     openAdmin,
     openAuth,
-    
     confirm,
     handleConfirmExecution,
-    
     initTheme,
     toggleTheme
   };
 });
 
-// --- COMPATIBILIDADE ---
-// Isso resolve o erro do evaluationStore: "has no exported member useNotificationStore"
-// Agora ambas as importações apontam para a mesma store centralizada.
 export const useNotificationStore = useUiStore;
