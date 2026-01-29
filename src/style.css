@@ -3,33 +3,42 @@
 :root { color-scheme: light; }
 .dark { color-scheme: dark; }
 
-/* ✅ Tema*/
+/* ✅ Tema */
 @theme {
   --color-klin-deep: #0C4C6C;
   --color-klin-vibrant: #007EAD;
+  
+  /* Cores Semânticas */
   --color-primary: #007EAD;
   --color-primary-dark: #0C4C6C;
   --color-success: #16a34a;
   --color-danger: #dc2626;
   --color-warning: #eab308;
-  --color-bg-primary: #f3f4f6;
+
+  /* Backgrounds */
+  --color-bg-primary: #f8fafc; /* gray-50 */
   --color-bg-secondary: #ffffff;
-  --color-bg-tertiary: #f9fafb;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
+  --color-bg-tertiary: #f1f5f9;
+
+  /* Textos */
+  --color-text-primary: #0f172a; /* slate-900 */
+  --color-text-secondary: #475569; /* slate-600 */
+  
+  /* Bordas */
   --color-border-light: #e2e8f0;
-  --color-bg-primary-dark: #0f172a;
-  --color-bg-secondary-dark: #1e293b;
-  --color-bg-tertiary-dark: #334155;
-  --color-text-primary-dark: #f8fafc;
-  --color-text-secondary-dark: #94a3b8;
+
+  /* --- DARK MODE DEFINITIONS --- */
+  --color-bg-primary-dark: #0f172a; /* slate-900 */
+  --color-bg-secondary-dark: #1e293b; /* slate-800 */
+  --color-bg-tertiary-dark: #334155; /* slate-700 */
+  --color-text-primary-dark: #f8fafc; /* slate-50 */
+  --color-text-secondary-dark: #94a3b8; /* slate-400 */
   --color-border-dark: #334155;
 }
 
 /* ✅ Mapeamento Dark Mode */
 .dark {
   --color-primary: var(--color-klin-vibrant);
-  --color-primary-dark: var(--color-klin-deep);
   --color-bg-primary: var(--color-bg-primary-dark);
   --color-bg-secondary: var(--color-bg-secondary-dark);
   --color-bg-tertiary: var(--color-bg-tertiary-dark);
@@ -38,25 +47,15 @@
   --color-border-light: var(--color-border-dark);
 }
 
-/* ✅ COMPONENTES */
-@layer components {
-  .modal-fade-enter {
-    @starting-style { opacity: 0; transform: scale(0.95); }
-    opacity: 1;
-    transform: scale(1);
-    transition: all 0.2s ease-out;
-  }
-  .modal-fade-leave {
-    opacity: 0;
-    transform: scale(0.95);
-    transition: all 0.15s ease-in;
-  }
+/* ✅ CORREÇÃO CRUCIAL: Aplicar o fundo na página inteira */
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: 100vh;
 }
 
 /* ✅ Transição global */
 * {
-  transition:
-    background-color .2s ease,
-    color .2s ease,
-    border-color .2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
