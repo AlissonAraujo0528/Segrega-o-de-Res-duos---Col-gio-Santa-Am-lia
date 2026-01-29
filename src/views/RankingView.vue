@@ -19,7 +19,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | undefined = undefined
 
 const isAdmin = computed(() => authStore.userRole === 'admin')
 
-// Formatação de data
+// Helper de formatação de data
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
@@ -37,7 +37,7 @@ watch(localFilterText, (newFilter) => {
   }, 500)
 })
 
-// --- CORREÇÃO: Ação de Editar ---
+// --- AÇÃO DE EDITAR CORRIGIDA ---
 async function handleEdit(id: string) {
   // 1. Carrega os dados na store de avaliação
   await evaluationStore.loadEvaluationForEdit(id)
@@ -48,7 +48,7 @@ async function handleEdit(id: string) {
   uiStore.notify('Carregando auditoria para edição...', 'info')
 }
 
-// --- CORREÇÃO: Ação de Excluir ---
+// --- AÇÃO DE EXCLUIR CORRIGIDA ---
 function handleDelete(id: string) {
   if (!isAdmin.value) return
   
@@ -84,49 +84,98 @@ function getScoreBadgeClass(score: number) {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in pb-20">
+  <div class="space-y-4 animate-fade-in pb-24 md:pb-20">
     
-    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <div>
-        <h2 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-          <i class="fa-solid fa-list-check text-teal-600"></i> Histórico de Auditorias
-        </h2>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Visualize e gerencie as avaliações realizadas.
-        </p>
-      </div>
-
-      <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-        <div class="relative flex-1 sm:w-64">
-          <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-          <input
-            v-model="localFilterText"
-            type="search"
-            placeholder="Buscar setor ou avaliador..."
-            class="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition-all shadow-sm dark:text-white"
-          />
+    <header class="flex flex-col gap-3">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-teal-600"></i> Histórico
+          </h2>
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            Gerencie as auditorias.
+          </p>
         </div>
-
+        
         <AppButton 
           @click="rankingStore.exportAllResults"
           :loading="rankingStore.loading"
           :disabled="rankingStore.results.length === 0"
           variant="secondary"
-          icon="fa-solid fa-file-excel"
+          size="sm"
         >
-          Exportar
+          <i class="fa-solid fa-file-excel sm:mr-2"></i>
+          <span class="hidden sm:inline">Exportar</span>
         </AppButton>
+      </div>
+
+      <div class="relative w-full">
+        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+        <input
+          v-model="localFilterText"
+          type="search"
+          placeholder="Buscar setor ou avaliador..."
+          class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-base focus:ring-2 focus:ring-teal-500 outline-none transition-all shadow-sm dark:text-white"
+        />
       </div>
     </header>
 
-    <AppCard class="flex flex-col min-h-[400px]">
+    <div v-if="rankingStore.loading" class="py-12 text-center text-teal-600">
+        <i class="fa-solid fa-circle-notch fa-spin text-3xl"></i>
+        <p class="text-sm mt-2 font-medium">Carregando...</p>
+    </div>
+
+    <div v-else-if="rankingStore.results.length === 0" class="py-12 text-center text-gray-400">
+        <i class="fa-solid fa-magnifying-glass text-3xl opacity-30"></i>
+        <p class="mt-2">Nenhum resultado encontrado.</p>
+    </div>
+
+    <div v-else>
       
-      <div class="overflow-x-auto flex-1">
+      <div class="grid grid-cols-1 gap-3 sm:hidden">
+        <div 
+          v-for="item in rankingStore.results" 
+          :key="item.id" 
+          class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col gap-3"
+          @click="isAdmin ? handleEdit(item.id) : null"
+        >
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="text-xs font-bold text-gray-400 uppercase tracking-wide block mb-1">{{ formatDate(item.date) }}</span>
+              <h3 class="font-bold text-gray-800 dark:text-white text-lg leading-tight">{{ item.sector_name }}</h3>
+              <p class="text-xs text-gray-500 mt-1 truncate max-w-[200px]">Resp: {{ item.responsible }}</p>
+            </div>
+            <span class="px-3 py-1 rounded-lg text-sm font-bold border shrink-0" :class="getScoreBadgeClass(item.score)">
+              {{ item.score }} pts
+            </span>
+          </div>
+
+          <div class="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-700 mt-1">
+             <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <div class="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                  <i class="fa-solid fa-user text-[10px]"></i>
+                </div>
+                {{ item.evaluator }}
+             </div>
+
+             <div v-if="isAdmin" class="flex gap-2">
+                <button @click.stop="handleEdit(item.id)" class="p-2.5 text-teal-600 bg-teal-50 dark:bg-teal-900/20 rounded-lg active:scale-95 transition-transform">
+                  <i class="fa-solid fa-pencil"></i>
+                </button>
+                <button @click.stop="handleDelete(item.id)" class="p-2.5 text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg active:scale-95 transition-transform">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hidden sm:block overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
         <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700">
           <thead class="bg-gray-50 dark:bg-gray-700/50">
             <tr>
               <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data</th>
-              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Setor / Sala</th>
+              <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Setor</th>
               <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pontos</th>
               <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Responsável</th>
               <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Avaliador</th>
@@ -134,25 +183,9 @@ function getScoreBadgeClass(score: number) {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
-            
-            <tr v-if="rankingStore.loading">
-              <td colspan="6" class="px-6 py-12 text-center text-gray-400">
-                 <i class="fa-solid fa-circle-notch fa-spin text-3xl text-teal-500 mb-3"></i>
-                 <p class="text-sm font-medium">Carregando dados...</p>
-              </td>
-            </tr>
-
-            <tr v-else-if="rankingStore.results.length === 0">
-              <td colspan="6" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                 <i class="fa-solid fa-magnifying-glass text-3xl mb-3 opacity-30"></i>
-                 <p>{{ localFilterText ? 'Nenhum resultado encontrado.' : 'Nenhuma avaliação registrada.' }}</p>
-              </td>
-            </tr>
-
-            <tr v-for="(item, index) in rankingStore.results" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
-              
-              <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                 {{ formatDate(item.date) }}
+            <tr v-for="item in rankingStore.results" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                {{ formatDate(item.date) }}
               </td>
 
               <td class="px-6 py-4 whitespace-nowrap">
@@ -162,7 +195,7 @@ function getScoreBadgeClass(score: number) {
               </td>
 
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold shadow-sm border border-transparent" :class="getScoreBadgeClass(item.score)">
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold shadow-sm" :class="getScoreBadgeClass(item.score)">
                   {{ item.score }} pts
                 </span>
               </td>
@@ -182,8 +215,8 @@ function getScoreBadgeClass(score: number) {
 
               <td v-if="isAdmin" class="px-6 py-4 whitespace-nowrap text-right">
                 <div class="flex justify-end gap-2">
-                    <AppButton size="sm" variant="ghost" icon="fa-solid fa-pencil" @click="handleEdit(item.id)" title="Editar" />
-                    <AppButton size="sm" variant="ghost" class="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" icon="fa-solid fa-trash" @click="handleDelete(item.id)" title="Excluir" />
+                    <AppButton size="sm" variant="ghost" icon="fa-solid fa-pencil" @click.stop="handleEdit(item.id)" title="Editar" />
+                    <AppButton size="sm" variant="ghost" class="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" icon="fa-solid fa-trash" @click.stop="handleDelete(item.id)" title="Excluir" />
                 </div>
               </td>
             </tr>
@@ -191,9 +224,9 @@ function getScoreBadgeClass(score: number) {
         </table>
       </div>
 
-      <div class="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center mt-auto">
+      <div class="bg-gray-50 dark:bg-gray-800/50 px-4 py-4 rounded-b-xl border-t border-gray-200 dark:border-gray-700 flex justify-between items-center mt-auto">
         <span class="text-xs text-gray-500 dark:text-gray-400">
-          Página <strong>{{ rankingStore.currentPage }}</strong> de {{ rankingStore.totalPages }}
+          Pág. <strong>{{ rankingStore.currentPage }}</strong> de {{ rankingStore.totalPages }}
         </span>
 
         <div class="flex gap-2">
@@ -202,19 +235,19 @@ function getScoreBadgeClass(score: number) {
             :disabled="rankingStore.currentPage === 1" 
             @click="rankingStore.fetchResults(rankingStore.currentPage - 1, localFilterText)"
           >
-            Anterior
+            Ant
           </AppButton>
           <AppButton 
             size="sm" variant="secondary" 
             :disabled="rankingStore.currentPage >= rankingStore.totalPages" 
             @click="rankingStore.fetchResults(rankingStore.currentPage + 1, localFilterText)"
           >
-            Próxima
+            Próx
           </AppButton>
         </div>
       </div>
+    </div>
 
-    </AppCard>
   </div>
 </template>
 
