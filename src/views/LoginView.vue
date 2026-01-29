@@ -15,47 +15,38 @@ const showPassword = ref(false)
 const isLoading = ref(false)
 const viewMode = ref<'login' | 'recovery'>('login')
 
-// Computado para mudar o título dinamicamente com animação
-const pageTitle = computed(() => viewMode.value === 'login' ? 'Bem-vindo de volta!' : 'Recuperar Acesso')
-const pageSubtitle = computed(() => viewMode.value === 'login' ? 'Insira suas credenciais para acessar o painel 5S.' : 'Enviaremos um link para redefinir sua senha.')
+const pageTitle = computed(() => viewMode.value === 'login' ? 'Bem-vindo(a)!' : 'Recuperar Acesso')
+const pageSubtitle = computed(() => viewMode.value === 'login' ? 'Acesse o sistema de Gestão Ambiental.' : 'Enviaremos um link para redefinir sua senha.')
 
-// Alternar visibilidade da senha
 const togglePassword = () => {
   showPassword.value = !showPassword.value
 }
 
 async function handleSubmit() {
-  // CORREÇÃO: showToast -> notify
   if (!email.value) return uiStore.notify('Por favor, digite seu e-mail.', 'warning')
   
   isLoading.value = true
 
   try {
     if (viewMode.value === 'recovery') {
-      // --- FLUXO DE RECUPERAÇÃO ---
       const { error } = await authStore.handleForgotPassword(email.value)
       if (error) throw error
-      
-      // CORREÇÃO: showToast -> notify
       uiStore.notify('Link de recuperação enviado para seu e-mail!', 'success')
-      viewMode.value = 'login' // Volta pro login automaticamente
+      viewMode.value = 'login'
     } else {
-      // --- FLUXO DE LOGIN ---
       if (!password.value) {
         throw new Error('Por favor, digite sua senha.')
       }
       
       const success = await authStore.handleLogin(email.value, password.value)
       if (success) {
-        // CORREÇÃO: showToast -> notify
         uiStore.notify(`Olá, ${authStore.user?.email?.split('@')[0]}!`, 'success')
-        router.push('/dashboard') // Redirecionamento explícito
+        router.push('/')
       } else {
         throw new Error('E-mail ou senha incorretos.')
       }
     }
   } catch (error: any) {
-    // CORREÇÃO: showToast -> notify
     uiStore.notify(error.message || 'Ocorreu um erro inesperado.', 'error')
   } finally {
     isLoading.value = false
@@ -68,12 +59,12 @@ async function handleSubmit() {
     
     <div class="hidden lg:flex lg:w-1/2 relative bg-gray-900 overflow-hidden">
       <img 
-        src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop" 
-        alt="Industrial Background" 
+        src="https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?q=80&w=2070&auto=format&fit=crop" 
+        alt="Gestão Ambiental" 
         class="absolute inset-0 w-full h-full object-cover opacity-40"
       />
       
-      <div class="absolute inset-0 bg-gradient-to-br from-teal-900/90 to-gray-900/90"></div>
+      <div class="absolute inset-0 bg-gradient-to-br from-teal-900/90 to-gray-900/80"></div>
 
       <div class="relative z-10 w-full flex flex-col justify-between p-12 text-white">
         <div>
@@ -82,15 +73,15 @@ async function handleSubmit() {
         
         <div class="space-y-4">
           <h1 class="text-4xl font-extrabold tracking-tight leading-tight">
-            Gestão de Qualidade <br> & Ambientes Seguros
+            Klin Ambiental <br> & Coleta Seletiva
           </h1>
           <p class="text-teal-100 text-lg max-w-md">
-            O Programa 5S é a base para a melhoria contínua. Mantenha o padrão de excelência da Klin.
+            Garanta a conformidade e a sustentabilidade em cada setor. Juntos por um futuro mais limpo.
           </p>
         </div>
 
         <div class="text-xs text-teal-200/60 font-mono">
-          System v2.0.0 &bull; Secure Environment
+          System v2.1.0 &bull; Secure Environment
         </div>
       </div>
     </div>
@@ -126,7 +117,7 @@ async function handleSubmit() {
                   v-model="email"
                   type="email"
                   required
-                  placeholder="ex: joao.silva@klin.com.br"
+                  placeholder="seu.nome@klin.com.br"
                   class="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
                 />
               </div>
@@ -141,7 +132,7 @@ async function handleSubmit() {
                     @click.prevent="viewMode = 'recovery'"
                     class="text-xs font-medium text-teal-600 hover:text-teal-500 hover:underline"
                   >
-                    Esqueceu a senha?
+                    Esqueceu?
                   </a>
                 </div>
                 <div class="relative group">
@@ -173,7 +164,7 @@ async function handleSubmit() {
                 class="w-full py-3.5 text-base shadow-lg shadow-teal-900/10 hover:shadow-teal-900/20" 
                 :loading="isLoading"
               >
-                {{ viewMode === 'login' ? 'Entrar no Sistema' : 'Enviar Link de Recuperação' }}
+                {{ viewMode === 'login' ? 'Entrar no Sistema' : 'Enviar Link' }}
               </AppButton>
             </div>
 
@@ -193,7 +184,7 @@ async function handleSubmit() {
         </div>
 
         <p class="text-center text-xs text-gray-400 dark:text-gray-600">
-          &copy; {{ new Date().getFullYear() }} Klin Produtos Infantis. Todos os direitos reservados.
+          &copy; {{ new Date().getFullYear() }} Klin Produtos Infantis.
         </p>
 
       </div>
@@ -202,28 +193,9 @@ async function handleSubmit() {
 </template>
 
 <style scoped>
-/* Animações de Entrada/Saída */
-.slide-fade-enter-active {
-  transition: all 0.3s ease-out;
-}
-
-.slide-fade-leave-active {
-  transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1);
-}
-
-.slide-fade-enter-from,
-.slide-fade-leave-to {
-  transform: translateY(-10px);
-  opacity: 0;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
+.slide-fade-enter-active { transition: all 0.3s ease-out; }
+.slide-fade-leave-active { transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1); }
+.slide-fade-enter-from, .slide-fade-leave-to { transform: translateY(-10px); opacity: 0; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

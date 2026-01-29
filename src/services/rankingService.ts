@@ -11,14 +11,10 @@ export interface RankingItem {
 }
 
 export const rankingService = {
-  /**
-   * Busca ranking paginado
-   */
   async getRankings(page = 1, limit = 10, search = '') {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    // Base da query na tabela 'evaluations'
     let query = supabaseClient
       .from('evaluations')
       .select(`
@@ -30,10 +26,12 @@ export const rankingService = {
         observations,
         sectors ( name )
       `, { count: 'exact' })
-      .order('score', { ascending: false })
+      // ALTERAÇÃO AQUI: Ordenar por DATA (mais recente primeiro)
+      .order('date', { ascending: false }) 
+      // Desempate: se for mesma data, pega a criada por último (hora/minuto)
+      .order('created_at', { ascending: false }) 
       .range(from, to);
 
-    // Filtro de busca (apenas nas colunas de texto da própria evaluation para evitar erro de join)
     if (search) {
       query = query.or(`evaluator.ilike.%${search}%,responsible.ilike.%${search}%`);
     }
@@ -42,24 +40,19 @@ export const rankingService = {
 
     if (error) throw new Error(error.message);
 
-    // Mapeamento seguro usando os tipos do seu supabase.ts
     const flatData: RankingItem[] = (data || []).map((item: any) => ({
-      id: item.id.toString(), // Supabase retorna ID numérico às vezes, garantimos string
+      id: item.id.toString(),
       score: item.score,
       date: item.date,
       evaluator: item.evaluator,
-      responsible: item.responsible || 'N/A', // Campo responsible está em evaluations
+      responsible: item.responsible || 'N/A',
       observations: item.observations,
-      // Pega o nome do setor da relação
       sector_name: item.sectors?.name || 'Setor Removido'
     }));
 
     return { data: flatData, count: count || 0 };
   },
 
-  /**
-   * Busca dados para Excel
-   */
   async getAllForExport() {
     const { data, error } = await supabaseClient
       .from('evaluations')
@@ -72,6 +65,7 @@ export const rankingService = {
         observations,
         sectors ( name )
       `)
+      // ALTERAÇÃO AQUI TAMBÉM: Exportar do mais novo pro mais antigo
       .order('date', { ascending: false });
 
     if (error) throw new Error(error.message);
