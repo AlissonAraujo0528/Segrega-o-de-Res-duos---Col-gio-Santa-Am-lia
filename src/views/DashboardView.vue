@@ -27,7 +27,7 @@ function changeMonth(delta: number) {
   store.setFilter(newMonth, newYear)
 }
 
-// TIPAGEM EXPLÍCITA PARA CORRIGIR O ERRO TS7053
+// Definição de Tipo para as chaves
 type MedalType = 'gold' | 'silver' | 'bronze';
 
 const medalConfig: Record<MedalType, { color: string; bg: string; border: string; icon: string; label: string }> = {
@@ -102,18 +102,18 @@ const medalConfig: Record<MedalType, { color: string; bg: string; border: string
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div v-for="(sectors, type) in store.data.medals" :key="type" 
                class="relative overflow-hidden rounded-2xl border-2 p-5 flex flex-col items-center text-center transition-transform hover:scale-[1.02] shadow-sm"
-               :class="[medalConfig[type as MedalType].bg, medalConfig[type as MedalType].border]">
+               :class="[medalConfig[type as unknown as MedalType].bg, medalConfig[type as unknown as MedalType].border]">
             
             <div class="w-14 h-14 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center text-2xl shadow-sm mb-3"
-                 :class="medalConfig[type as MedalType].color">
-              <i class="fa-solid" :class="medalConfig[type as MedalType].icon"></i>
+                 :class="medalConfig[type as unknown as MedalType].color">
+              <i class="fa-solid" :class="medalConfig[type as unknown as MedalType].icon"></i>
             </div>
             
             <h4 class="text-3xl font-black text-gray-800 dark:text-white mb-1">
               {{ (sectors as string[]).length }}
             </h4>
             <span class="text-xs font-bold uppercase tracking-wider opacity-70 mb-4 block">
-              {{ medalConfig[type as MedalType].label }}
+              {{ medalConfig[type as unknown as MedalType].label }}
             </span>
             
             <div class="w-full border-t border-black/5 dark:border-white/10 pt-3 mt-auto">
