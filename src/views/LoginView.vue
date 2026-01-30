@@ -60,7 +60,7 @@ async function handleSubmit() {
           </div>
           <h1 class="text-3xl font-extrabold text-gray-800 dark:text-white tracking-tight">{{ pageTitle }}</h1>
           <p class="text-gray-500 dark:text-gray-400 mt-2 text-sm">
-            {{ viewMode === 'login' ? 'Gestão Ambiental & Coleta Seletiva' : 'Digite seu e-mail para receber o link.' }}
+            {{ viewMode === 'login' ? 'Programa Coleta Seletiva - Braskem Santa Amélia' : 'Digite seu e-mail para receber o link.' }}
           </p>
         </div>
 
@@ -135,7 +135,7 @@ async function handleSubmit() {
 
     <div class="absolute bottom-4 text-center w-full">
       <p class="text-xs text-white/40 font-medium">
-        &copy; {{ new Date().getFullYear() }} Klin Produtos Infantis. Ambiente Seguro.
+        &copy; {{ new Date().getFullYear() }} Klin Engenharia e Gestão Ambiental.
       </p>
     </div>
 
