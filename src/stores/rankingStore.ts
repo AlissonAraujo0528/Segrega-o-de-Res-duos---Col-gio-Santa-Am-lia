@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-// CORREÇÃO: Importamos 'type RankingItem' do Service para garantir compatibilidade total
 import { rankingService, type RankingItem } from '../services/rankingService';
 import { exportToExcel } from '../lib/exportToExcel';
 import { useUiStore } from './uiStore';
@@ -14,7 +13,6 @@ export const useRankingStore = defineStore('ranking', () => {
   const evaluationStore = useEvaluationStore();
 
   // --- State ---
-  // O TypeScript agora sabe que este RankingItem é o mesmo que o Service retorna
   const results = ref<RankingItem[]>([]);
   const loading = ref(false);
   
@@ -38,7 +36,7 @@ export const useRankingStore = defineStore('ranking', () => {
   });
 
   const listItems = computed(() => {
-    // Se estiver na página 1 e sem filtro, remove os top 3 da lista para não duplicar com o pódio
+    // Se estiver na página 1 e sem filtro, remove os top 3 da lista para não duplicar
     if (currentPage.value === 1 && !filterText.value) {
       return results.value.slice(3); 
     }
@@ -48,23 +46,36 @@ export const useRankingStore = defineStore('ranking', () => {
   // --- Actions ---
 
   /**
-   * Busca os resultados paginados e filtrados via Serviço
+   * Busca os resultados com Timeout de segurança para Mobile
    */
   async function fetchResults(page = 1, search = '') {
     loading.value = true;
     currentPage.value = page;
     filterText.value = search;
 
+    // 1. Cria um timer de 10 segundos que rejeita a promessa
+    const timeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('A conexão demorou muito. Verifique sua internet.')), 10000)
+    );
+
     try {
-      const { data, count } = await rankingService.getRankings(page, itemsPerPage, search);
-      results.value = data;
-      totalItems.value = count;
+      // 2. Promise.race: Coloca a requisição do banco para "correr" contra o timer
+      // O que terminar primeiro define o resultado.
+      const result: any = await Promise.race([
+        rankingService.getRankings(page, itemsPerPage, search),
+        timeout
+      ]);
+
+      // Se chegou aqui, a requisição ganhou do timer
+      results.value = result.data;
+      totalItems.value = result.count;
+
     } catch (err: any) {
       console.error(err);
       ui.notify(err.message || 'Erro ao carregar ranking.', 'error');
-      results.value = []; // Limpa em caso de erro
+      results.value = []; // Limpa dados visuais em caso de erro
     } finally {
-      loading.value = false;
+      loading.value = false; // Garante que o spinner vai sumir
     }
   }
 
@@ -78,26 +89,23 @@ export const useRankingStore = defineStore('ranking', () => {
     }
 
     try {
-      // Usa a store de avaliação para carregar os dados
       await evaluationStore.loadEvaluationForEdit(id);
       
-      // Se carregou com sucesso, abre o modal
-      if (evaluationStore.currentEvaluation) {
-        ui.openEvaluation(); 
+      // O redirecionamento de aba é feito na View, aqui só garantimos o load
+      if (!evaluationStore.currentEvaluation) {
+        throw new Error('Falha ao carregar dados.');
       }
     } catch (error) {
-      // O erro já é tratado no evaluationStore, mas garantimos aqui
-      ui.notify('Não foi possível abrir a edição.', 'error');
+      ui.notify('Não foi possível carregar a edição.', 'error');
     }
   }
 
   /**
-   * Exporta TODOS os dados para Excel (ExcelJS)
+   * Exporta TODOS os dados para Excel
    */
   async function exportAllResults() {
     loading.value = true;
     try {
-      // 1. Busca dados brutos do serviço
       const rawData = await rankingService.getAllForExport();
 
       if (!rawData || rawData.length === 0) {
@@ -105,7 +113,6 @@ export const useRankingStore = defineStore('ranking', () => {
         return;
       }
 
-      // 2. Chama o utilitário de exportação inteligente
       await exportToExcel(rawData, {
         fileName: 'Relatorio_Auditorias_5S',
         sheetName: 'Ranking Geral',
@@ -129,19 +136,14 @@ export const useRankingStore = defineStore('ranking', () => {
   }
 
   return {
-    // State
     results,
     loading,
     filterText,
     currentPage,
     totalItems,
-    
-    // Getters
     totalPages,
     top3,
     listItems,
-
-    // Actions
     fetchResults,
     openEditModal,
     exportAllResults

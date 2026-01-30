@@ -45,7 +45,6 @@ export const useAuthStore = defineStore('auth', () => {
     if (user.value) {
       sessionTimer.value = setTimeout(() => {
         console.warn('Sessão expirada por inatividade.');
-        // CORREÇÃO: Passando argumentos separados (string, string)
         ui.notify('Sessão expirada. Faça login novamente.', 'warning');
         signOut();
       }, INACTIVITY_TIMEOUT_MS);
@@ -103,6 +102,21 @@ export const useAuthStore = defineStore('auth', () => {
     });
   }
 
+  // Verifica se a sessão é válida sem forçar UI de carregamento
+  async function checkSession() {
+    try {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error || !data.session) {
+        return { valid: false };
+      }
+      // Atualiza o user local caso tenha havido refresh de token silencioso
+      user.value = data.session.user;
+      return { valid: true };
+    } catch (e) {
+      return { valid: false };
+    }
+  }
+
   async function handleLogin(email: string, pass: string): Promise<boolean> {
     try {
       const { data, error } = await supabaseClient.auth.signInWithPassword({
@@ -132,7 +146,6 @@ export const useAuthStore = defineStore('auth', () => {
       userRole.value = 'user';
       if (sessionTimer.value) clearTimeout(sessionTimer.value);
 
-      // CORREÇÃO: Argumentos separados
       ui.notify('Você saiu do sistema.', 'info');
       
       // Força recarregamento para limpar estados da memória
@@ -155,13 +168,11 @@ export const useAuthStore = defineStore('auth', () => {
       await fetchUserRole(data.session.user.id);
 
       ui.closeAllModals();
-      // CORREÇÃO: Argumentos separados
       ui.notify('Senha recuperada com sucesso!', 'success');
       startInactivityTimer();
     }
   }
   
-  // Helper para abrir modal de login
   function openLoginModal() {
     ui.openAuth('login');
   }
@@ -173,6 +184,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthReady,
     isAuthenticated,
     initialize,
+    checkSession,
     handleLogin,
     signOut,
     handleForgotPassword,
