@@ -17,7 +17,6 @@ onMounted(() => {
   store.fetchDashboardData()
 })
 
-// Navegação de mês
 function changeMonth(delta: number) {
   let newMonth = store.currentMonth + delta
   let newYear = store.currentYear
@@ -28,8 +27,10 @@ function changeMonth(delta: number) {
   store.setFilter(newMonth, newYear)
 }
 
-// Configuração visual das medalhas
-const medalConfig = {
+// TIPAGEM EXPLÍCITA PARA CORRIGIR O ERRO TS7053
+type MedalType = 'gold' | 'silver' | 'bronze';
+
+const medalConfig: Record<MedalType, { color: string; bg: string; border: string; icon: string; label: string }> = {
   gold: { 
     color: 'text-yellow-600', 
     bg: 'bg-yellow-100 dark:bg-yellow-900/20', 
@@ -48,7 +49,7 @@ const medalConfig = {
     color: 'text-orange-700 dark:text-orange-500', 
     bg: 'bg-orange-50 dark:bg-orange-900/20', 
     border: 'border-orange-200 dark:border-orange-900/50', 
-    icon: 'fa-circle-exclamation', // Ícone de alerta para bronze
+    icon: 'fa-circle-exclamation', 
     label: 'Bronze (< 34 pts)' 
   }
 }
@@ -101,24 +102,24 @@ const medalConfig = {
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div v-for="(sectors, type) in store.data.medals" :key="type" 
                class="relative overflow-hidden rounded-2xl border-2 p-5 flex flex-col items-center text-center transition-transform hover:scale-[1.02] shadow-sm"
-               :class="[medalConfig[type].bg, medalConfig[type].border]">
+               :class="[medalConfig[type as MedalType].bg, medalConfig[type as MedalType].border]">
             
             <div class="w-14 h-14 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center text-2xl shadow-sm mb-3"
-                 :class="medalConfig[type].color">
-              <i class="fa-solid" :class="medalConfig[type].icon"></i>
+                 :class="medalConfig[type as MedalType].color">
+              <i class="fa-solid" :class="medalConfig[type as MedalType].icon"></i>
             </div>
             
             <h4 class="text-3xl font-black text-gray-800 dark:text-white mb-1">
-              {{ sectors.length }}
+              {{ (sectors as string[]).length }}
             </h4>
             <span class="text-xs font-bold uppercase tracking-wider opacity-70 mb-4 block">
-              {{ medalConfig[type].label }}
+              {{ medalConfig[type as MedalType].label }}
             </span>
             
             <div class="w-full border-t border-black/5 dark:border-white/10 pt-3 mt-auto">
-               <p v-if="sectors.length === 0" class="text-xs opacity-50 italic">Nenhuma sala nesta categoria.</p>
+               <p v-if="(sectors as string[]).length === 0" class="text-xs opacity-50 italic">Nenhuma sala nesta categoria.</p>
                <div v-else class="max-h-24 overflow-y-auto text-xs font-medium text-gray-700 dark:text-gray-300 space-y-1 px-2 custom-scrollbar">
-                 <div v-for="sector in sectors" :key="sector" class="truncate">
+                 <div v-for="sector in (sectors as string[])" :key="sector" class="truncate">
                    {{ sector }}
                  </div>
                </div>
@@ -136,16 +137,16 @@ const medalConfig = {
                 <i class="fa-solid fa-arrow-trend-up text-green-500"></i> Destaques (Melhoraram)
               </h3>
               <span class="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded">
-                {{ store.data.improved.length }}
+                {{ (store.data.improved as any[]).length }}
               </span>
             </div>
             
             <div class="flex-1 min-h-[150px]">
-              <p v-if="store.data.improved.length === 0" class="text-sm text-gray-400 text-center py-10 italic">
+              <p v-if="(store.data.improved as any[]).length === 0" class="text-sm text-gray-400 text-center py-10 italic">
                 Nenhuma evolução registrada neste mês.
               </p>
               <ul v-else class="space-y-2">
-                <li v-for="item in store.data.improved" :key="item.name" 
+                <li v-for="item in (store.data.improved as any[])" :key="item.name" 
                     class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
                   <span class="font-semibold text-sm text-gray-700 dark:text-gray-200">{{ item.name }}</span>
                   <div class="flex items-center gap-3">
@@ -165,16 +166,16 @@ const medalConfig = {
                 <i class="fa-solid fa-triangle-exclamation text-red-500"></i> Atenção (Caíram)
               </h3>
               <span class="text-xs font-bold bg-red-100 text-red-700 px-2 py-1 rounded">
-                {{ store.data.worsened.length }}
+                {{ (store.data.worsened as any[]).length }}
               </span>
             </div>
             
             <div class="flex-1 min-h-[150px]">
-              <p v-if="store.data.worsened.length === 0" class="text-sm text-gray-400 text-center py-10 italic">
+              <p v-if="(store.data.worsened as any[]).length === 0" class="text-sm text-gray-400 text-center py-10 italic">
                 Excelente! Nenhuma sala piorou a nota.
               </p>
               <ul v-else class="space-y-2">
-                <li v-for="item in store.data.worsened" :key="item.name" 
+                <li v-for="item in (store.data.worsened as any[])" :key="item.name" 
                     class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                   <span class="font-semibold text-sm text-gray-700 dark:text-gray-200">{{ item.name }}</span>
                   <div class="flex items-center gap-3">
@@ -198,12 +199,11 @@ const medalConfig = {
         <AppCard class="p-6">
           <div class="h-48 flex items-end justify-around gap-2 sm:gap-8 px-2 sm:px-10">
             
-            <div v-if="store.data.quarterly.length === 0" class="w-full text-center text-gray-400 self-center">
+            <div v-if="(store.data.quarterly as any[]).length === 0" class="w-full text-center text-gray-400 self-center">
               Sem dados históricos suficientes.
             </div>
 
-            <div v-for="(item, index) in store.data.quarterly" :key="item.label" class="flex flex-col items-center gap-2 w-full group relative">
-              
+            <div v-for="(item, index) in (store.data.quarterly as any[])" :key="item.label" class="flex flex-col items-center gap-2 w-full group relative">
               <span class="text-lg sm:text-2xl font-black text-teal-600 dark:text-teal-400 transition-transform group-hover:-translate-y-1">
                 {{ item.value }}
               </span>
@@ -218,7 +218,7 @@ const medalConfig = {
                 {{ item.label }}
               </span>
 
-              <div v-if="index < store.data.quarterly.length - 1" class="hidden sm:block absolute top-1/2 -right-1/2 w-full h-[2px] border-t-2 border-dashed border-gray-200 dark:border-gray-700 -z-10"></div>
+              <div v-if="index < (store.data.quarterly as any[]).length - 1" class="hidden sm:block absolute top-1/2 -right-1/2 w-full h-[2px] border-t-2 border-dashed border-gray-200 dark:border-gray-700 -z-10"></div>
             </div>
 
           </div>
@@ -236,7 +236,6 @@ const medalConfig = {
 .animate-grow { animation: growUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 @keyframes growUp { from { height: 0; } }
 
-/* Scrollbar fina para listas longas */
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
