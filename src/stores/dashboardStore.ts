@@ -1,59 +1,71 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { dashboardService, type DashboardData } from '../services/dashboardService';
-import { useUiStore } from './uiStore';
+import { supabaseClient } from '../lib/supabaseClient';
 
 export const useDashboardStore = defineStore('dashboard', () => {
-  const ui = useUiStore();
   
-  // --- State (Reativo) ---
+  // --- State ---
   const loading = ref(false);
-  const data = ref<DashboardData>(dashboardService.getEmptyState());
-  
-  // Controle de Mês/Ano (Futuro: Pode ser movido para o Service se a lógica crescer)
-  const selectedPeriod = ref({
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear()
-  });
+  const data = ref<any>(null); // Armazena o JSON completo retornado pelo RPC
+
+  // Filtros de Data (Inicializa com o mês atual)
+  const currentMonth = ref(new Date().getMonth() + 1); // 1 a 12
+  const currentYear = ref(new Date().getFullYear());
 
   // --- Actions ---
 
   /**
-   * Carrega os dados do dashboard e atualiza o estado
+   * Busca os dados avançados do banco usando a função RPC
    */
-  async function loadDashboard() {
+  async function fetchDashboardData() {
     loading.value = true;
+    
     try {
-      // Chama o serviço inteligente
-      // Nota: O serviço atual já busca os últimos 6 meses automaticamente.
-      // Se quiser filtrar por mês específico, teríamos que adaptar o serviço.
-      // Por enquanto, vamos manter a visão "Geral dos últimos 6 meses" que é mais rica.
-      const metrics = await dashboardService.getDashboardMetrics();
+      // Chama a função SQL que criamos ('get_advanced_dashboard')
+      const { data: result, error } = await supabaseClient.rpc('get_advanced_dashboard', {
+        p_mes: currentMonth.value,
+        p_ano: currentYear.value
+      });
+
+      if (error) throw error;
+
+      // O resultado já vem pronto no formato JSON esperado pelo Vue
+      data.value = result;
       
-      data.value = metrics;
-    } catch (err: any) {
-      console.error(err);
-      ui.notify(err.message || 'Erro ao carregar dashboard.', 'error');
+    } catch (error: any) {
+      console.error('Erro ao carregar dashboard:', error);
+      // Se quiser, pode injetar a uiStore aqui para notificar erro
     } finally {
       loading.value = false;
     }
   }
 
   /**
-   * Força uma atualização dos dados (ex: após salvar uma nova avaliação)
+   * Atualiza os filtros e recarrega os dados
    */
-  async function refresh() {
-    await loadDashboard();
+  function setFilter(month: number, year: number) {
+    currentMonth.value = month;
+    currentYear.value = year;
+    fetchDashboardData();
+  }
+
+  /**
+   * Recarrega os dados mantendo os filtros atuais
+   */
+  function refresh() {
+    fetchDashboardData();
   }
 
   return {
     // State
     loading,
     data,
-    selectedPeriod,
+    currentMonth,
+    currentYear,
 
     // Actions
-    loadDashboard,
+    fetchDashboardData,
+    setFilter,
     refresh
   };
 });
