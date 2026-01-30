@@ -194,12 +194,14 @@ function resetForm() {
              </div>
              <div>
                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">Data</label>
+                
                 <input 
                   v-model="form.date" 
                   type="date" 
                   :max="new Date().toISOString().split('T')[0]"
                   required 
-                  class="w-full rounded-xl border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                  class="w-full rounded-xl border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition-all text-gray-900 dark:text-white"
+                  style="color-scheme: light dark;"
                 />
              </div>
           </div>
@@ -288,7 +290,7 @@ function resetForm() {
                <textarea 
                  v-model="form.observations" 
                  rows="3" 
-                 class="w-full rounded-xl border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none" 
+                 class="w-full rounded-xl border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none text-gray-900 dark:text-white" 
                  placeholder="Detalhes opcionais..."
                ></textarea>
             </div>

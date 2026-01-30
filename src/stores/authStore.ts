@@ -148,8 +148,9 @@ export const useAuthStore = defineStore('auth', () => {
 
       ui.notify('Você saiu do sistema.', 'info');
       
-      // Força recarregamento para limpar estados da memória
-      window.location.href = '/';
+      // CORREÇÃO AQUI: window.location.reload() em vez de '/'
+      // Isso evita o erro 404 no GitHub Pages ao recarregar
+      window.location.reload(); 
     }
   }
 
